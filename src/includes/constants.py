@@ -22,7 +22,7 @@ class Phases(Enum):
 
 class AttachmentTypes(Enum):
     PROFILEREPORT = 0,
-    SEABORN_CHART = 1,
+    MATPLOTLIB_CHART = 1,
     PLAINTEXT = 2,
     HTML = 3,
     JSON = 4,

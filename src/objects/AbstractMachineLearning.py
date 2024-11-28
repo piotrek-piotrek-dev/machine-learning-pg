@@ -1,16 +1,12 @@
 import logging
 from pathlib import Path
-
-import matplotlib
 import pandas as pandas
 from abc import abstractmethod, ABC
 from typing import Dict, Optional, Any
-
-
+from matplotlib.figure import Figure
 import src.helpers.Utils as utils
-
 from ydata_profiling import ProfileReport
-
+from src.helpers.Utils import Attachment
 from src.includes.constants import (
     Phases, DESCRIPTION_REPORT_NAME_TEMPLATE, ATTACHMENTS_DIR, AttachmentTypes,
 )
@@ -23,6 +19,8 @@ class AbstractMachineLearning(ABC):
     def __init__(self):
         utils.createDirectoryStructure()
         self._phaseAttachmentIndexes: Dict[Phases, int] = {p : 0 for p in Phases}
+        self._attachmentsList: Dict[Phases, list[utils.Attachment]] = {p : [] for p in Phases}
+        self.comments:Dict[Phases, list[str]] = {p : [] for p in Phases}
         self.dataSetName: str = ""
         self.dataSetFile: Path = Path()
         self.mainDataFrame: pandas.DataFrame = pandas.DataFrame()
@@ -42,29 +40,29 @@ class AbstractMachineLearning(ABC):
         pandas.set_option('display.max_columns', self.mainDataFrame.columns.size)
         self.addCommentToSection(Phases.DATA_GATHERING,
                                  f"We'll be using {self.dataSetFile} file for this project")
-        print(self.summary.get(Phases.DATA_GATHERING))
+        self._summarizeSection(Phases.DATA_GATHERING)
 
 
         log.info("Describing DataSet")
         self.separator(Phases.DATA_DESCRIPTION)
         self.describeDataSet()
         self.prepareDescriptionReport()
-        print(self.summary[Phases.DATA_DESCRIPTION])
+        self._summarizeSection(Phases.DATA_DESCRIPTION)
 
         log.info("Cleaning up dataframe")
         self.separator(Phases.DATA_CLEANUP, "Using knowledge from previous step")
         self.cleanUpDataframe()
-        print(self.summary[Phases.DATA_CLEANUP])
+        self._summarizeSection(Phases.DATA_CLEANUP)
 
         log.info("Data standardization")
         self.separator(Phases.DATA_STANDARDIZATION, "Using knowledge from previous step")
         self.dataStandardization()
-        print(self.summary[Phases.DATA_STANDARDIZATION])
+        self._summarizeSection(Phases.DATA_STANDARDIZATION)
 
         log.info("Going to EDA")
         self.separator(Phases.DATA_EXPLORATION, "Using knowledge from previous step")
         self.exploratoryAnalysis()
-        print(self.summary[Phases.DATA_EXPLORATION])
+        self._summarizeSection(Phases.DATA_EXPLORATION)
 
 
 
@@ -74,8 +72,12 @@ class AbstractMachineLearning(ABC):
         if message: print(message + "\n")
 
     def addCommentToSection(self, phase: Phases, comment: str) -> None:
-        self.summary[phase] = f"### STAGE {phase.name} COMMENT:\n{comment}"
-        p = self.addAttachment(phase, comment, AttachmentTypes.PLAINTEXT, "comments")
+        self.comments[phase].append(comment)
+
+    def saveCommentsFromSection(self, phase: Phases) -> None:
+        comments = '\n'.join(self.comments[phase])
+        self.summary[phase] = f"### STAGE {phase.name} COMMENT:\n{comments}"
+        p = self.addAttachment(phase, comments, AttachmentTypes.PLAINTEXT, "comments")
         print(f"Comments saved to: {p}\n")
 
     def cleanDatasetName(self):
@@ -144,12 +146,21 @@ class AbstractMachineLearning(ABC):
             print(f"Report {reportName} already exists in {path}\nskipping... 🎉")
             log.info(f"Report {reportName} already exists in {path}\nskipping... 🎉")
 
-    def addAttachment(self, stage: Phases, attachment: Any, attachmentType: AttachmentTypes = None, fileName: str = None) -> Path:
+    def addAttachment(self, stage: Phases,
+                      attachment: Any,
+                      attachmentType: AttachmentTypes = None,
+                      fileName: str = None,
+                      comment: str = None) -> Path:
+        """
+        Note: you must save the figure before any call to plt.show()
+        """
         if fileName is None:
             fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(stage))])
         pathForFile: Path = Path(utils.getPathToRoot(), ATTACHMENTS_DIR, stage.name, fileName)
 
-        if isinstance(attachment, matplotlib.figure.Figure) or attachmentType == AttachmentTypes.SEABORN_CHART:
+        if isinstance(attachment, Figure) or attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
+            if comment is None:
+                comment = attachment.gca().get_title()
             attachment.savefig(pathForFile)
         elif isinstance(attachment, ProfileReport) or attachmentType == AttachmentTypes.PROFILEREPORT:
             attachment.to_file(pathForFile)
@@ -158,9 +169,14 @@ class AbstractMachineLearning(ABC):
             with open(pathForFile, "w") as file:
                 file.write(attachment)
 
+        self._attachmentsList[stage].append(Attachment(fileName, pathForFile, comment))
         return pathForFile
 
     def _getPhaseAttachmentIndex(self, phase: Phases) -> int:
         index = self._phaseAttachmentIndexes[phase]
         self._phaseAttachmentIndexes[phase] = index + 1
         return index
+
+    def _summarizeSection(self, section: Phases):
+        print(self.summary.get(section))
+        self.saveCommentsFromSection(section)

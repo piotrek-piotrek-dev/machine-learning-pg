@@ -33,3 +33,9 @@ def createDirectoryStructure():
     for p in Phases:
         if not Path(root, ATTACHMENTS_DIR, p.name).exists():
             Path(root, ATTACHMENTS_DIR, p.name).mkdir()
+
+class Attachment():
+    def __init__(self, fileName: str, filePath:Path, comment:str):
+        self.fileName = fileName
+        self.filePath = filePath
+        self.comment = comment
