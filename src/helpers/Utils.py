@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
 from re import split
+from typing import Any
 
-from src.includes.constants import PROJECT_NAME, DATASET_DST_DIR, ATTACHMENTS_DIR, REPORTS_DIR, Phases
+from matplotlib.figure import Figure
+from ydata_profiling import ProfileReport
+
+from src.includes.constants import PROJECT_NAME, DATASET_DST_DIR, ATTACHMENTS_DIR, REPORTS_DIR, Phases, AttachmentTypes
 
 
 def getPathToRoot(start: Path = None):
@@ -39,3 +43,20 @@ class Attachment():
         self.fileName = fileName
         self.filePath = filePath
         self.comment = comment
+
+def saveAttachment(stage: Phases,
+                  attachment: Any,
+                  attachmentType: AttachmentTypes = None,
+                  fileName: str = None) -> Path:
+    pathForFile: Path = Path(getPathToRoot(), ATTACHMENTS_DIR, stage.name, fileName)
+
+    if isinstance(attachment, Figure) or attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
+        attachment.savefig(pathForFile)
+    elif isinstance(attachment, ProfileReport) or attachmentType == AttachmentTypes.PROFILEREPORT:
+        attachment.to_file(pathForFile)
+    elif isinstance(attachment, str) or attachmentType == AttachmentTypes.PLAINTEXT:
+        pathForFile = pathForFile.with_suffix('.txt')
+        with open(pathForFile, "w") as file:
+            file.write(attachment)
+
+    return pathForFile

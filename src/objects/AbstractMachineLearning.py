@@ -156,19 +156,10 @@ class AbstractMachineLearning(ABC):
         """
         if fileName is None:
             fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(stage))])
-        pathForFile: Path = Path(utils.getPathToRoot(), ATTACHMENTS_DIR, stage.name, fileName)
+        if comment is None and (attachmentType is AttachmentTypes.MATPLOTLIB_CHART or isinstance(attachment, Figure)):
+            comment = attachment.gca().get_title()
 
-        if isinstance(attachment, Figure) or attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
-            if comment is None:
-                comment = attachment.gca().get_title()
-            attachment.savefig(pathForFile)
-        elif isinstance(attachment, ProfileReport) or attachmentType == AttachmentTypes.PROFILEREPORT:
-            attachment.to_file(pathForFile)
-        elif isinstance(attachment, str) or attachmentType == AttachmentTypes.PLAINTEXT:
-            pathForFile = pathForFile.with_suffix('.txt')
-            with open(pathForFile, "w") as file:
-                file.write(attachment)
-
+        pathForFile = utils.saveAttachment(stage, attachment, attachmentType, fileName)
         self._attachmentsList[stage].append(Attachment(fileName, pathForFile, comment))
         return pathForFile
 
@@ -178,5 +169,5 @@ class AbstractMachineLearning(ABC):
         return index
 
     def _summarizeSection(self, section: Phases):
-        print(self.summary.get(section))
         self.saveCommentsFromSection(section)
+        print(self.summary.get(section))
