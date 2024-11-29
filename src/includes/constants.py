@@ -27,3 +27,4 @@ class AttachmentTypes(Enum):
     HTML = 3,
     JSON = 4,
     CSV = 5,
+    PLOTLY_CHART =6,

@@ -3,6 +3,7 @@ from pathlib import Path
 from re import split
 from typing import Any
 
+import plotly.graph_objs
 from matplotlib.figure import Figure
 from ydata_profiling import ProfileReport
 
@@ -49,14 +50,15 @@ def saveAttachment(stage: Phases,
                   attachmentType: AttachmentTypes = None,
                   fileName: str = None) -> Path:
     pathForFile: Path = Path(getPathToRoot(), ATTACHMENTS_DIR, stage.name, fileName)
-
-    if isinstance(attachment, Figure) or attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
-        attachment.savefig(pathForFile)
-    elif isinstance(attachment, ProfileReport) or attachmentType == AttachmentTypes.PROFILEREPORT:
-        attachment.to_file(pathForFile)
-    elif isinstance(attachment, str) or attachmentType == AttachmentTypes.PLAINTEXT:
-        pathForFile = pathForFile.with_suffix('.txt')
-        with open(pathForFile, "w") as file:
-            file.write(attachment)
+    if attachment is not None:
+        if isinstance(attachment, Figure) and attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
+            attachment.savefig(pathForFile)
+        elif isinstance(attachment, ProfileReport) or attachmentType == AttachmentTypes.PROFILEREPORT:
+            attachment.to_file(pathForFile)
+        elif isinstance(attachment,  plotly.graph_objs.Figure) and attachmentType == AttachmentTypes.PLOTLY_CHART:
+            attachment.write_image(pathForFile)
+        elif isinstance(attachment, str) or attachmentType == AttachmentTypes.PLAINTEXT:
+            with open(pathForFile, "w") as file:
+                file.write(attachment)
 
     return pathForFile

@@ -6,7 +6,7 @@ import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
 from typing import Optional
-
+import plotly.express
 from matplotlib.figure import Figure
 
 from src.helpers.KaggleDownloader import KaggleDownloader
@@ -97,7 +97,7 @@ class GrapeQuality(AbstractMachineLearning):
         df_heatmap.show()
         plt.close()
         self.addCommentToSection(Phases.DATA_EXPLORATION, 
-                f"- strong correlation between quality size/category and sugar, sun exposure and berry size")
+                f"- strong correlation between quality size/category and sugar, sun exposure and berry size\n")
 
         # let's examine sugar vs quality
         sugar_vs_category: Figure = plt.figure(figsize=(12,10))
@@ -114,9 +114,91 @@ class GrapeQuality(AbstractMachineLearning):
         sugar_vs_category.show()
         plt.close()
 
+        self.addCommentToSection(Phases.DATA_EXPLORATION,
+                                 f"- but we'd like to end with an estimation of successes (highest price and "
+                                 f"quality) based on location of land")
+
+        region_vs_quality = plotly.express.histogram(
+            data_frame=self.mainDataFrame.groupby(['region', 'variety', 'quality_category'])[['quality_score']].sum().reset_index(),
+            x='region',
+            y='quality_score',
+            color='variety',
+            title='region vs quality')
+        region_vs_quality.update_traces(marker_line_width=1)
+        region_vs_quality.update_layout(title = {'font_color' : 'rosybrown', 'x' : 0.43, 'y' : 0.9,
+                                                 'xanchor' : 'center', 'yanchor' : 'top'},
+                                        font_color = 'lightsalmon', barmode = 'group',
+                                        legend_title_font_color = 'fuchsia')
+        # self.addAttachment(Phases.DATA_EXPLORATION,
+        #                    region_vs_quality,
+        #                    AttachmentTypes.PLOTLY_CHART,
+        #                    "region_vs_quality.png",
+        #                    "region vs quality")
+        region_vs_quality.show()
+        plt.close()
+
+        print(f"Let's explore correlation in a few columns:\n")
+        self._correlationCoefDeepDive('quality_score', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'cluster_weight_g', 'quality_category')
+        self._correlationCoefDeepDive('sun_exposure_hours', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('soil_moisture_percent', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('sugar_content_brix', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'sugar_content_brix', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'sun_exposure_hours', 'quality_category')
 
 
+        print("Looking for outliers:\n")
+        self._detectOutliers('quality_score')
+        self._detectOutliers('berry_size_mm')
+        self._detectOutliers('cluster_weight_g')
+        self._detectOutliers('sun_exposure_hours')
+        self._detectOutliers('soil_moisture_percent')
+        self._detectOutliers('sugar_content_brix')
 
+
+        self.addCommentToSection(Phases.DATA_EXPLORATION,
+                                 f"- niether corr coef suggest any good relationship between berry size and quality score\n"
+                                 f""
+                                 f"- seems obvious, but the greater the berry, the higher quality of wine\n"
+                                 f"- this doesn't look like a regression but rather clusterization problem\n")
+
+    def _correlationCoefDeepDive(self, first: str, second: str, hue: str):
+        plot: Figure = plt.figure(figsize=(12,10))
+        sns.scatterplot(x=first,
+                        y=second,
+                        hue=hue,
+                        data=self.mainDataFrame)
+        plt.title(f'{first} vs {second}')
+        self.addAttachment(Phases.DATA_EXPLORATION,
+                           plot,
+                           AttachmentTypes.MATPLOTLIB_CHART,
+                           f"{first}_vs_{second}.png")
+        plot.show()
+        plt.close()
+        # let's dive deeper:
+        print(f"{first} to {second} correlation coef: "
+              f"{self.mainDataFrame[first].corr(self.mainDataFrame[second])}\n")
+        for category in self.mainDataFrame[hue].unique():
+            tmp = self.mainDataFrame[self.mainDataFrame['quality_category'] == category]
+            print(f"Corr coef between quality_score and berry_size on {category}:\n\t"
+                  f"kendall:  {tmp[first].corr(tmp[second], method='kendall')}\n\t"
+                  f"spearman: {tmp[first].corr(tmp[second], method='spearman')}\n\t"
+                  f"pearson:  {tmp[first].corr(tmp[second], method='pearson')}\n")
+
+    def _detectOutliers(self, column: str):
+        plot: Figure = plt.figure(figsize=(12,10))
+        sns.boxplot(y=column,
+                    data=self.mainDataFrame)
+        plt.title(f'outliers in {column}')
+        self.addAttachment(Phases.DATA_EXPLORATION,
+                           plot,
+                           AttachmentTypes.MATPLOTLIB_CHART,
+                           f"outliers_{column}.png")
+        plot.show()
+        plt.close()
+        print(f"Mean in {column} is:        {self.mainDataFrame[column].mean()}\n"
+              f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
+              f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
 
     def selectFeatures(self):
         pass

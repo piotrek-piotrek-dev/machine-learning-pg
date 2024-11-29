@@ -46,7 +46,7 @@ class AbstractMachineLearning(ABC):
         log.info("Describing DataSet")
         self.separator(Phases.DATA_DESCRIPTION)
         self.describeDataSet()
-        self.prepareDescriptionReport()
+        self.saveDescriptionReport()
         self._summarizeSection(Phases.DATA_DESCRIPTION)
 
         log.info("Cleaning up dataframe")
@@ -54,16 +54,15 @@ class AbstractMachineLearning(ABC):
         self.cleanUpDataframe()
         self._summarizeSection(Phases.DATA_CLEANUP)
 
-        log.info("Data standardization")
-        self.separator(Phases.DATA_STANDARDIZATION, "Using knowledge from previous step")
-        self.dataStandardization()
-        self._summarizeSection(Phases.DATA_STANDARDIZATION)
-
         log.info("Going to EDA")
         self.separator(Phases.DATA_EXPLORATION, "Using knowledge from previous step")
         self.exploratoryAnalysis()
         self._summarizeSection(Phases.DATA_EXPLORATION)
 
+        log.info("Data standardization")
+        self.separator(Phases.DATA_STANDARDIZATION, "Using knowledge from previous step")
+        self.dataStandardization()
+        self._summarizeSection(Phases.DATA_STANDARDIZATION)
 
 
     def separator(self, phase: Phases, message: str = None):
@@ -77,7 +76,7 @@ class AbstractMachineLearning(ABC):
     def saveCommentsFromSection(self, phase: Phases) -> None:
         comments = '\n'.join(self.comments[phase])
         self.summary[phase] = f"### STAGE {phase.name} COMMENT:\n{comments}"
-        p = self.addAttachment(phase, comments, AttachmentTypes.PLAINTEXT, "comments")
+        p = self.addAttachment(phase, comments, AttachmentTypes.PLAINTEXT, "comments.txt", "section comments")
         print(f"Comments saved to: {p}\n")
 
     def cleanDatasetName(self):
@@ -122,29 +121,36 @@ class AbstractMachineLearning(ABC):
     def addAdditionalCorrelationsToDescriptionReport(self) -> Optional[dict]:
         return None
 
-    def prepareDescriptionReport(self):
+    def saveDescriptionReport(self) -> Path:
         try:
             title=f"This is a description report for dataset: {self.dataSetName}"
             reportName = DESCRIPTION_REPORT_NAME_TEMPLATE.replace("XXX", self.dataSetName)
             additionalCorrelations: dict
             if not (additionalCorrelations := self.addAdditionalCorrelationsToDescriptionReport()):
                 additionalCorrelations = {"auto": {"calculate": True}}
-            self.generateProfileReport(self.mainDataFrame, title, reportName, additionalCorrelations)
-
+            report = self.generateProfileReport(self.mainDataFrame, title, reportName, additionalCorrelations)
+            return self.addAttachment(
+                Phases.DATA_DESCRIPTION,
+                report,
+                AttachmentTypes.PROFILEREPORT,
+                reportName,
+                "Data description report")
         except Exception as e:
             log.critical("💀Tried to prepare a description report but got some errors on the way, see exception details:"+ str(e))
             raise e
 
-    def generateProfileReport(self, data: pandas.DataFrame, title: str, reportName: str, correlations: Dict):
+    def generateProfileReport(self, data: pandas.DataFrame, title: str, reportName: str, correlations: Dict) -> Optional[ProfileReport]:
         path = Path(utils.getPathToRoot(), ATTACHMENTS_DIR, Phases.DATA_DESCRIPTION.name, reportName)
         if not path.exists():
             report = ProfileReport(data, title=title, explorative=True, correlations = correlations)
             print(f"saving report '{title}' to {str(path)}, this can take a while... \ngo and grab yourself a ☕️")
             log.info(f"saving report '{title}' to {str(path)}, this can take a while... \ngo and grab yourself a ☕️")
-            self.addAttachment(Phases.DATA_DESCRIPTION, report, AttachmentTypes.PROFILEREPORT, reportName)
+            return report
+                #self.addAttachment(Phases.DATA_DESCRIPTION, report, AttachmentTypes.PROFILEREPORT, reportName)
         else:
             print(f"Report {reportName} already exists in {path}\nskipping... 🎉")
             log.info(f"Report {reportName} already exists in {path}\nskipping... 🎉")
+            return None
 
     def addAttachment(self, stage: Phases,
                       attachment: Any,
@@ -158,6 +164,8 @@ class AbstractMachineLearning(ABC):
             fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(stage))])
         if comment is None and (attachmentType is AttachmentTypes.MATPLOTLIB_CHART or isinstance(attachment, Figure)):
             comment = attachment.gca().get_title()
+        elif comment is None and (attachmentType is AttachmentTypes.PLOTLY_CHART or isinstance(attachment, Figure)):
+            comment = attachment.layout.title.text
 
         pathForFile = utils.saveAttachment(stage, attachment, attachmentType, fileName)
         self._attachmentsList[stage].append(Attachment(fileName, pathForFile, comment))
@@ -170,4 +178,6 @@ class AbstractMachineLearning(ABC):
 
     def _summarizeSection(self, section: Phases):
         self.saveCommentsFromSection(section)
-        print(self.summary.get(section))
+        print(self.summary.get(section)+"\n###ATTACHMENTS:")
+        for a in self._attachmentsList[section]:
+            print(f"'{a.comment}': {a.fileName}\n")
