@@ -1,9 +1,13 @@
 import logging
+import re
 from pathlib import Path
 import pandas as pandas
 from abc import abstractmethod, ABC
 from typing import Dict, Optional, Any
+
 from matplotlib.figure import Figure
+from pandas import DataFrame
+
 import src.helpers.Utils as utils
 from ydata_profiling import ProfileReport
 from src.helpers.Utils import Attachment
@@ -64,6 +68,16 @@ class AbstractMachineLearning(ABC):
         self.dataStandardization()
         self._summarizeSection(Phases.DATA_STANDARDIZATION)
 
+        log.info("Feature exploring")
+        self.separator(Phases.FEATURE_SELECTION)
+
+        log.info("Modelling")
+        self.separator(Phases.MODELING)
+
+        log.info("tuning model (on features)")
+        self.separator(Phases.MODEL_ADJUSTING)
+
+
 
     def separator(self, phase: Phases, message: str = None):
         print(f"""
@@ -88,6 +102,15 @@ class AbstractMachineLearning(ABC):
 
     @abstractmethod
     def describeDataSet(self):
+        """
+        check missing vals
+        identify duplicates
+        verify data types
+        check for outliers
+        validate numeric ranges
+        cross check column dependency
+        Check for Inconsistent Data Entry
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -178,6 +201,41 @@ class AbstractMachineLearning(ABC):
 
     def _summarizeSection(self, section: Phases):
         self.saveCommentsFromSection(section)
+        #%% a cell
         print(self.summary.get(section)+"\n###ATTACHMENTS:")
         for a in self._attachmentsList[section]:
-            print(f"'{a.comment}': {a.fileName}\n")
+            print(f"'{a.comment}': {a.fileName}")
+
+    def exposeOutliers(self, *columnName: str) -> {str: DataFrame}:
+        """
+        check for outliers using interquartile values
+        https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-data-statistics/cc-6th/a/interquartile-range-review
+        :param columnName: strings representing the column to search for outliers
+        :return: a new Dataframe object with detected outliers
+        """
+        ret: {str:DataFrame} = {}
+        for c in columnName:
+            col = self.mainDataFrame[c]
+            quantile1 = col.quantile(0.25)
+            quantile3 = col.quantile(0.75)
+            iqr = quantile3 - quantile1
+            lower_bound = quantile1 - 1.5 * iqr
+            upper_bound = quantile3 + 1.5 * iqr
+            ret[c] = self.mainDataFrame[(col < lower_bound) | (col > upper_bound)]
+        return ret
+
+    def valuesOutsideOfNumericRange(self, columns: [str], ranges: [(int,int)]) -> {str: DataFrame}:
+        if len(columns) != len(ranges):
+            raise Exception("Columns and ranges must have the same length")
+        ret: {str:DataFrame} = {}
+        for idx, col in enumerate(columns):
+            ret[col] = self.mainDataFrame[~self.mainDataFrame[col].between(*ranges[idx])]
+        return ret
+
+    def checkDataFormat(self, columns: [str], format: str) -> {str:DataFrame}:
+        ret: {str:DataFrame} = {}
+        def checkFormat(payload: Any, scheme: str) -> bool:
+            return re.match(str(payload), scheme) is not None
+        for column in columns:
+            ret[column] = self.mainDataFrame[column].apply(lambda x: checkFormat(x, format))
+        return ret

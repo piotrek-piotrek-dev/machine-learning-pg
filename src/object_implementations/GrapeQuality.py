@@ -77,10 +77,6 @@ class GrapeQuality(AbstractMachineLearning):
         self.addCommentToSection(Phases.DATA_CLEANUP,f"- Dropped column 'sample_id' as we don't need it\n"
                                                      f"- Other than that, this dataset seems clean")
 
-    def dataStandardization(self):
-        self.addCommentToSection(Phases.DATA_STANDARDIZATION,
-                                 f"Data is clean, does not neet to be standardized\n")
-
     def exploratoryAnalysis(self):
         # let's see the heatmap ..
         df_heatmap:Figure = plt.figure(figsize=(12,10))
@@ -118,8 +114,10 @@ class GrapeQuality(AbstractMachineLearning):
                                  f"- but we'd like to end with an estimation of successes (highest price and "
                                  f"quality) based on location of land")
 
+        # having trouble in presenting this histogram in seaborn/matplotlib
         region_vs_quality = plotly.express.histogram(
-            data_frame=self.mainDataFrame.groupby(['region', 'variety', 'quality_category'])[['quality_score']].sum().reset_index(),
+            data_frame=self.mainDataFrame.groupby(['region', 'variety', 'quality_category'])[['quality_score']]
+                                .sum().reset_index(),
             x='region',
             y='quality_score',
             color='variety',
@@ -129,11 +127,7 @@ class GrapeQuality(AbstractMachineLearning):
                                                  'xanchor' : 'center', 'yanchor' : 'top'},
                                         font_color = 'lightsalmon', barmode = 'group',
                                         legend_title_font_color = 'fuchsia')
-        # self.addAttachment(Phases.DATA_EXPLORATION,
-        #                    region_vs_quality,
-        #                    AttachmentTypes.PLOTLY_CHART,
-        #                    "region_vs_quality.png",
-        #                    "region vs quality")
+
         region_vs_quality.show()
         plt.close()
 
@@ -157,8 +151,8 @@ class GrapeQuality(AbstractMachineLearning):
 
 
         self.addCommentToSection(Phases.DATA_EXPLORATION,
-                                 f"- niether corr coef suggest any good relationship between berry size and quality score\n"
-                                 f""
+                                 f"- niether corr coef suggest any good relationship between berry size and "
+                                 f"quality score\n"
                                  f"- seems obvious, but the greater the berry, the higher quality of wine\n"
                                  f"- this doesn't look like a regression but rather clusterization problem\n")
 
@@ -199,6 +193,12 @@ class GrapeQuality(AbstractMachineLearning):
         print(f"Mean in {column} is:        {self.mainDataFrame[column].mean()}\n"
               f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
               f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
+
+    def dataStandardization(self):
+        self.addCommentToSection(Phases.DATA_STANDARDIZATION,
+                                 f"- Data contains categorical types. need encode: \n"
+                                 f"\t- OneHotEncoding for quality category"
+                                 f"\t- hashing for variety and region\n")
 
     def selectFeatures(self):
         pass
