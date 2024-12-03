@@ -4,8 +4,10 @@ from typing import override
 import pandas
 from typing import Optional
 
+from pandas import DataFrame
+
 from src.helpers.KaggleDownloader import KaggleDownloader
-from src.includes.constants import Phases
+from src.includes.constants import Stages
 from src.objects.AbstractMachineLearning import AbstractMachineLearning
 
 log = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ class WineTaseML(AbstractMachineLearning):
               f"Outliers in: ")
 
         # sprwadz czy trzeba normaliowac/standaryzowac dane
-        self.addCommentToSection(Phases.DATA_DESCRIPTION,
+        self.addCommentToSection(
                                  f"The dataset does not contain nulls or missing values - cool, however it"
                                  f"does contain dome duplicate values which we need to deal with")
 
@@ -49,7 +51,7 @@ class WineTaseML(AbstractMachineLearning):
     def selectFeatures(self):
         pass
 
-    def trainModel(self):
+    def trainModel(self, x: DataFrame, y: DataFrame):
         pass
 
     def evaluateModel(self):

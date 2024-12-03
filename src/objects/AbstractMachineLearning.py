@@ -7,12 +7,13 @@ from typing import Dict, Optional, Any
 
 from matplotlib.figure import Figure
 from pandas import DataFrame
+from sklearn.compose import ColumnTransformer
 
 import src.helpers.Utils as utils
 from ydata_profiling import ProfileReport
 from src.helpers.Utils import Attachment
 from src.includes.constants import (
-    Phases, DESCRIPTION_REPORT_NAME_TEMPLATE, ATTACHMENTS_DIR, AttachmentTypes,
+    Stages, DESCRIPTION_REPORT_NAME_TEMPLATE, ATTACHMENTS_DIR, AttachmentTypes,
 )
 
 log = logging.getLogger(__name__)
@@ -22,72 +23,89 @@ class AbstractMachineLearning(ABC):
 
     def __init__(self):
         utils.createDirectoryStructure()
-        self._phaseAttachmentIndexes: Dict[Phases, int] = {p : 0 for p in Phases}
-        self._attachmentsList: Dict[Phases, list[utils.Attachment]] = {p : [] for p in Phases}
-        self.comments:Dict[Phases, list[str]] = {p : [] for p in Phases}
+        self._phaseAttachmentIndexes: Dict[Stages, int] = {p : 0 for p in Stages}
+        self._attachmentsList: Dict[Stages, list[utils.Attachment]] = {p : [] for p in Stages}
+        self.comments:Dict[Stages, list[str]] = {p : [] for p in Stages}
         self.dataSetName: str = ""
         self.dataSetFile: Path = Path()
         self.mainDataFrame: pandas.DataFrame = pandas.DataFrame()
-        self.summary: Dict[Phases, str] = {p : f"### STAGE {p.name}COMMENT:\nPlease provide a comment" for p in Phases}
+        self.summary: Dict[Stages, str] = {p : f"### STAGE {p.name}COMMENT:\nPlease provide a comment" for p in Stages}
+        self.modelPreprocessor: ColumnTransformer = ColumnTransformer([])
+        self.model: Any = None
+        self.dontSaveAttachments = False
+        self.currentStage = Stages.INIT
+        self.x: DataFrame
+        self.y: DataFrame
 
     def run(self):
         log.debug("entering main")
         log.info("Starting Machine Learning for data set '%s'", self.dataSetName)
-        self.separator(Phases.ENTER, f"Starting Machine Learning for data set {self.dataSetName}")
+        self.currentStage = Stages.INIT
+        self.separator(f"Starting Machine Learning for data set {self.dataSetName}")
 
         log.info("Obtaining DataSet")
-        self.separator(Phases.DATA_GATHERING)
+        self.currentStage = Stages.DATA_GATHERING
+        self.separator()
         self.mainDataFrame, self.dataSetFile = self.getDataSet()
         self.cleanDatasetName()
 
         #this is to set max output colums so functions i.e. describe() won't crop anything out
         pandas.set_option('display.max_columns', self.mainDataFrame.columns.size)
-        self.addCommentToSection(Phases.DATA_GATHERING,
-                                 f"We'll be using {self.dataSetFile} file for this project")
-        self._summarizeSection(Phases.DATA_GATHERING)
+        self.addCommentToSection(f"We'll be using {self.dataSetFile} file for this project")
+        self._summarizeSection()
 
 
         log.info("Describing DataSet")
-        self.separator(Phases.DATA_DESCRIPTION)
+        self.currentStage = Stages.DATA_DESCRIPTION
+        self.separator()
         self.describeDataSet()
         self.saveDescriptionReport()
-        self._summarizeSection(Phases.DATA_DESCRIPTION)
+        self._summarizeSection()
 
         log.info("Cleaning up dataframe")
-        self.separator(Phases.DATA_CLEANUP, "Using knowledge from previous step")
+        self.currentStage = Stages.DATA_CLEANUP
+        self.separator("Using knowledge from previous step")
         self.cleanUpDataframe()
-        self._summarizeSection(Phases.DATA_CLEANUP)
+        self._summarizeSection()
 
         log.info("Going to EDA")
-        self.separator(Phases.DATA_EXPLORATION, "Using knowledge from previous step")
+        self.currentStage = Stages.DATA_EXPLORATION
+        self.separator("Using knowledge from previous step")
         self.exploratoryAnalysis()
-        self._summarizeSection(Phases.DATA_EXPLORATION)
+        self._summarizeSection()
 
-        log.info("Data standardization")
-        self.separator(Phases.DATA_STANDARDIZATION, "Using knowledge from previous step")
-        self.dataStandardization()
-        self._summarizeSection(Phases.DATA_STANDARDIZATION)
-
-        log.info("Feature exploring")
-        self.separator(Phases.FEATURE_SELECTION)
+        log.info("Data wrangling")
+        self.currentStage = Stages.DATA_WRANGLING
+        self.separator("Using knowledge from previous step")
+        x, y = self.dataWrangling()
+        self._summarizeSection()
 
         log.info("Modelling")
-        self.separator(Phases.MODELING)
+        self.currentStage = Stages.MODELING
+        self.separator()
+        self.model = self.trainModel(x, y)
+        self._summarizeSection()
+
+        log.info("Feature exploring")
+        self.currentStage = Stages.FEATURE_SELECTION
+        self.separator()
+
 
         log.info("tuning model (on features)")
-        self.separator(Phases.MODEL_ADJUSTING)
+        self.currentStage = Stages.MODEL_ADJUSTING
+        self.separator()
 
 
 
-    def separator(self, phase: Phases, message: str = None):
+    def separator(self, message: str = None):
         print(f"""
-        ------ Starting stage: {phase.name} ------""")
+        ------ Starting stage: {self.currentStage.name} ------""")
         if message: print(message + "\n")
 
-    def addCommentToSection(self, phase: Phases, comment: str) -> None:
-        self.comments[phase].append(comment)
+    def addCommentToSection(self, comment: str) -> None:
+        self.comments[self.currentStage].append(comment)
 
-    def saveCommentsFromSection(self, phase: Phases) -> None:
+    def saveCommentsFromSection(self, phase: Stages) -> None:
         comments = '\n'.join(self.comments[phase])
         self.summary[phase] = f"### STAGE {phase.name} COMMENT:\n{comments}"
         p = self.addAttachment(phase, comments, AttachmentTypes.PLAINTEXT, "comments.txt", "section comments")
@@ -118,7 +136,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def dataStandardization(self):
+    def dataWrangling(self) -> (DataFrame, DataFrame):
         raise NotImplementedError
 
     @abstractmethod
@@ -126,7 +144,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def trainModel(self):
+    def trainModel(self, x: DataFrame, y: DataFrame):
         raise NotImplementedError
 
     @abstractmethod
@@ -153,7 +171,7 @@ class AbstractMachineLearning(ABC):
                 additionalCorrelations = {"auto": {"calculate": True}}
             report = self.generateProfileReport(self.mainDataFrame, title, reportName, additionalCorrelations)
             return self.addAttachment(
-                Phases.DATA_DESCRIPTION,
+                Stages.DATA_DESCRIPTION,
                 report,
                 AttachmentTypes.PROFILEREPORT,
                 reportName,
@@ -163,7 +181,7 @@ class AbstractMachineLearning(ABC):
             raise e
 
     def generateProfileReport(self, data: pandas.DataFrame, title: str, reportName: str, correlations: Dict) -> Optional[ProfileReport]:
-        path = Path(utils.getPathToRoot(), ATTACHMENTS_DIR, Phases.DATA_DESCRIPTION.name, reportName)
+        path = Path(utils.getPathToRoot(), ATTACHMENTS_DIR, Stages.DATA_DESCRIPTION.name, reportName)
         if not path.exists():
             report = ProfileReport(data, title=title, explorative=True, correlations = correlations)
             print(f"saving report '{title}' to {str(path)}, this can take a while... \ngo and grab yourself a ☕️")
@@ -175,14 +193,17 @@ class AbstractMachineLearning(ABC):
             log.info(f"Report {reportName} already exists in {path}\nskipping... 🎉")
             return None
 
-    def addAttachment(self, stage: Phases,
+    def addAttachment(self, stage: Stages,
                       attachment: Any,
                       attachmentType: AttachmentTypes = None,
                       fileName: str = None,
-                      comment: str = None) -> Path:
+                      comment: str = None) -> Optional[Path]:
         """
         Note: you must save the figure before any call to plt.show()
         """
+        if self.dontSaveAttachments == True:
+            return None
+
         if fileName is None:
             fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(stage))])
         if comment is None and (attachmentType is AttachmentTypes.MATPLOTLIB_CHART or isinstance(attachment, Figure)):
@@ -194,16 +215,16 @@ class AbstractMachineLearning(ABC):
         self._attachmentsList[stage].append(Attachment(fileName, pathForFile, comment))
         return pathForFile
 
-    def _getPhaseAttachmentIndex(self, phase: Phases) -> int:
+    def _getPhaseAttachmentIndex(self, phase: Stages) -> int:
         index = self._phaseAttachmentIndexes[phase]
         self._phaseAttachmentIndexes[phase] = index + 1
         return index
 
-    def _summarizeSection(self, section: Phases):
-        self.saveCommentsFromSection(section)
+    def _summarizeSection(self):
+        self.saveCommentsFromSection(self.currentStage)
         #%% a cell
-        print(self.summary.get(section)+"\n###ATTACHMENTS:")
-        for a in self._attachmentsList[section]:
+        print(self.summary.get(self.currentStage)+"\n###ATTACHMENTS:")
+        for a in self._attachmentsList[self.currentStage]:
             print(f"'{a.comment}': {a.fileName}")
 
     def exposeOutliers(self, *columnName: str) -> {str: DataFrame}:

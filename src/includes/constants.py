@@ -8,12 +8,12 @@ ATTACHMENTS_DIR = Path("attachments")
 TOKEN_FILE = Path(Path.home(), ".kaggle", "kaggle.json")
 DATASET_DST_DIR = Path(".", "data_sets")
 
-class Phases(Enum):
-    ENTER = 0
+class Stages(Enum):
+    INIT = 0
     DATA_GATHERING = 1,
     DATA_DESCRIPTION = 2,
     DATA_CLEANUP = 3,
-    DATA_STANDARDIZATION = 4,
+    DATA_WRANGLING = 4,
     DATA_EXPLORATION = 5,
     FEATURE_SELECTION = 6,
     MODELING = 7,

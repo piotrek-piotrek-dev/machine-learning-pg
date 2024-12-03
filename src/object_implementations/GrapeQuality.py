@@ -5,12 +5,19 @@ import numpy
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
-from typing import Optional
+from typing import Optional, Any
 import plotly.express
 from matplotlib.figure import Figure
+from pandas.core.interchange.dataframe_protocol import DataFrame
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from src.helpers.KaggleDownloader import KaggleDownloader
-from src.includes.constants import Phases, AttachmentTypes
+from src.includes.constants import Stages, AttachmentTypes
 from src.objects.AbstractMachineLearning import AbstractMachineLearning
 
 
@@ -22,6 +29,7 @@ class GrapeQuality(AbstractMachineLearning):
         super().__init__()
         self.dataSetName = "grape-quality-dataset"
         self._dataSetKaggleURI = "mrmars1010/grape-quality"
+        self.dontSaveAttachments = True
 
 
     def getDataSet(self) -> (Optional[pandas.DataFrame], str):
@@ -51,8 +59,7 @@ class GrapeQuality(AbstractMachineLearning):
               f"Kurtosis for ...")
 
         # sprwadz czy trzeba normaliowac/standaryzowac dane
-        self.addCommentToSection(Phases.DATA_DESCRIPTION,
-                                 f"- drop the 'sample_id' column that came with the original dataset\n"
+        self.addCommentToSection(f"- drop the 'sample_id' column that came with the original dataset\n"
                                  f"- There are no missing values - cool\n"
                                  f"- There are no duplicate rows\n"
                                  f"- reformatted the categorical columns for better handling\n"
@@ -74,8 +81,8 @@ class GrapeQuality(AbstractMachineLearning):
     def cleanUpDataframe(self):
         #we don't need the id column that came with the dataset
         self.mainDataFrame.drop('sample_id', axis=1, inplace=True)
-        self.addCommentToSection(Phases.DATA_CLEANUP,f"- Dropped column 'sample_id' as we don't need it\n"
-                                                     f"- Other than that, this dataset seems clean")
+        self.addCommentToSection(f"- Dropped column 'sample_id' as we don't need it\n"
+                                 f"- Other than that, this dataset seems clean")
 
     def exploratoryAnalysis(self):
         # let's see the heatmap ..
@@ -86,13 +93,13 @@ class GrapeQuality(AbstractMachineLearning):
             cmap='coolwarm'
         )
         plt.title("Correlation Heatmap")
-        self.addAttachment(Phases.DATA_EXPLORATION,
+        self.addAttachment(Stages.DATA_EXPLORATION,
                            df_heatmap,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            "correlation_heatmap.png")
         df_heatmap.show()
         plt.close()
-        self.addCommentToSection(Phases.DATA_EXPLORATION, 
+        self.addCommentToSection(
                 f"- strong correlation between quality size/category and sugar, sun exposure and berry size\n")
 
         # let's examine sugar vs quality
@@ -103,15 +110,14 @@ class GrapeQuality(AbstractMachineLearning):
         plt.title('Sugar vs quality category')
         plt.xlabel("quality category")
         plt.ylabel("Sugar content")
-        self.addAttachment(Phases.DATA_EXPLORATION,
+        self.addAttachment(Stages.DATA_EXPLORATION,
                            sugar_vs_category,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            "sugar_vs_category.png")
         sugar_vs_category.show()
         plt.close()
 
-        self.addCommentToSection(Phases.DATA_EXPLORATION,
-                                 f"- but we'd like to end with an estimation of successes (highest price and "
+        self.addCommentToSection(f"- but we'd like to end with an estimation of successes (highest price and "
                                  f"quality) based on location of land")
 
         # having trouble in presenting this histogram in seaborn/matplotlib
@@ -150,8 +156,7 @@ class GrapeQuality(AbstractMachineLearning):
         self._detectOutliers('sugar_content_brix')
 
 
-        self.addCommentToSection(Phases.DATA_EXPLORATION,
-                                 f"- niether corr coef suggest any good relationship between berry size and "
+        self.addCommentToSection(f"- niether corr coef suggest any good relationship between berry size and "
                                  f"quality score\n"
                                  f"- seems obvious, but the greater the berry, the higher quality of wine\n"
                                  f"- this doesn't look like a regression but rather clusterization problem\n")
@@ -163,7 +168,7 @@ class GrapeQuality(AbstractMachineLearning):
                         hue=hue,
                         data=self.mainDataFrame)
         plt.title(f'{first} vs {second}')
-        self.addAttachment(Phases.DATA_EXPLORATION,
+        self.addAttachment(Stages.DATA_EXPLORATION,
                            plot,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"{first}_vs_{second}.png")
@@ -184,7 +189,7 @@ class GrapeQuality(AbstractMachineLearning):
         sns.boxplot(y=column,
                     data=self.mainDataFrame)
         plt.title(f'outliers in {column}')
-        self.addAttachment(Phases.DATA_EXPLORATION,
+        self.addAttachment(Stages.DATA_EXPLORATION,
                            plot,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"outliers_{column}.png")
@@ -194,17 +199,55 @@ class GrapeQuality(AbstractMachineLearning):
               f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
               f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
 
-    def dataStandardization(self):
-        self.addCommentToSection(Phases.DATA_STANDARDIZATION,
-                                 f"- Data contains categorical types. need encode: \n"
+    def dataWrangling(self) -> (DataFrame, DataFrame):
+        self.addCommentToSection(f"- Data contains categorical types. need encode: \n"
                                  f"\t- OneHotEncoding for quality category"
-                                 f"\t- hashing for variety and region\n")
+                                 f"\t- scaler for numerical - we don't loose anything if we apply it blindly\n")
+
+        x = self.mainDataFrame.drop('quality_category', axis = 1)
+        y = self.mainDataFrame['quality_category']
+
+        categorical_column = [cname for cname in x.columns if x[cname].dtype == 'object']
+        numerical_column = [cname for cname in x.columns if x[cname].dtype in ['int', 'float']]
+
+        categorical_transformer = Pipeline(steps = [
+            ('onehot', OneHotEncoder(handle_unknown = 'ignore', sparse_output = True))
+        ])
+        numerical_transformer = Pipeline(steps = [
+            ('scaler', StandardScaler())
+        ])
+
+        self.modelPreprocessor = ColumnTransformer([
+            ('cat', categorical_transformer, categorical_column),
+            ('num', numerical_transformer, numerical_column)
+
+        ])
+        return x, y
 
     def selectFeatures(self):
         pass
 
-    def trainModel(self):
-        pass
+    def trainModel(self, x:DataFrame, y:DataFrame) -> Any:
+        print(f"just reassure if we have all we need:\n {self.mainDataFrame.dtypes}\n")
+
+        x_train, x_test, y_train, y_test =  train_test_split(x, y, test_size = 0.2, random_state = 2)
+
+        forest = RandomForestClassifier(random_state = 2898)
+        forestPipeline = Pipeline(steps = [
+            ('preprocessor', self.modelPreprocessor),
+            ('model', forest)
+        ])
+
+        forestPipeline.fit(x_train, y_train)
+
+        forest_pred = forestPipeline.predict(x_test)
+        forest_accuracy = accuracy_score(y_test, forest_pred)
+        print('Accuracy Score is: ', forest_accuracy)
+
+        self.addCommentToSection(f"- After training, accuracy is {forest_accuracy}\n"
+                                 f"")
+
+        return forestPipeline
 
     def evaluateModel(self):
         pass

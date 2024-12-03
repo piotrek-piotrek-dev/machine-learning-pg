@@ -7,7 +7,7 @@ import plotly.graph_objs
 from matplotlib.figure import Figure
 from ydata_profiling import ProfileReport
 
-from src.includes.constants import PROJECT_NAME, DATASET_DST_DIR, ATTACHMENTS_DIR, REPORTS_DIR, Phases, AttachmentTypes
+from src.includes.constants import PROJECT_NAME, DATASET_DST_DIR, ATTACHMENTS_DIR, REPORTS_DIR, Stages, AttachmentTypes
 
 
 def getPathToRoot(start: Path = None):
@@ -35,7 +35,7 @@ def createDirectoryStructure():
         Path(root, REPORTS_DIR).mkdir()
     if not Path(root, ATTACHMENTS_DIR).exists():
         Path(root, ATTACHMENTS_DIR).mkdir()
-    for p in Phases:
+    for p in Stages:
         if not Path(root, ATTACHMENTS_DIR, p.name).exists():
             Path(root, ATTACHMENTS_DIR, p.name).mkdir()
 
@@ -45,10 +45,10 @@ class Attachment():
         self.filePath = filePath
         self.comment = comment
 
-def saveAttachment(stage: Phases,
-                  attachment: Any,
-                  attachmentType: AttachmentTypes = None,
-                  fileName: str = None) -> Path:
+def saveAttachment(stage: Stages,
+                   attachment: Any,
+                   attachmentType: AttachmentTypes = None,
+                   fileName: str = None) -> Path:
     pathForFile: Path = Path(getPathToRoot(), ATTACHMENTS_DIR, stage.name, fileName)
     if attachment is not None:
         if isinstance(attachment, Figure) and attachmentType == AttachmentTypes.MATPLOTLIB_CHART:
