@@ -5,19 +5,18 @@ import numpy
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
-from typing import Optional, Any
+from typing import Optional
 import plotly.express
 from matplotlib.figure import Figure
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from objects.AbstractModel import AbstractModel
 from src.helpers.KaggleDownloader import KaggleDownloader
-from src.includes.constants import Stages, AttachmentTypes
+from src.includes.constants import AttachmentTypes
 from src.objects.AbstractMachineLearning import AbstractMachineLearning
 
 
@@ -93,8 +92,7 @@ class GrapeQuality(AbstractMachineLearning):
             cmap='coolwarm'
         )
         plt.title("Correlation Heatmap")
-        self.addAttachment(Stages.DATA_EXPLORATION,
-                           df_heatmap,
+        self.addAttachment(df_heatmap,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            "correlation_heatmap.png")
         df_heatmap.show()
@@ -110,8 +108,7 @@ class GrapeQuality(AbstractMachineLearning):
         plt.title('Sugar vs quality category')
         plt.xlabel("quality category")
         plt.ylabel("Sugar content")
-        self.addAttachment(Stages.DATA_EXPLORATION,
-                           sugar_vs_category,
+        self.addAttachment(sugar_vs_category,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            "sugar_vs_category.png")
         sugar_vs_category.show()
@@ -138,22 +135,22 @@ class GrapeQuality(AbstractMachineLearning):
         plt.close()
 
         print(f"Let's explore correlation in a few columns:\n")
-        self._correlationCoefDeepDive('quality_score', 'berry_size_mm', 'quality_category')
-        self._correlationCoefDeepDive('quality_score', 'cluster_weight_g', 'quality_category')
-        self._correlationCoefDeepDive('sun_exposure_hours', 'berry_size_mm', 'quality_category')
-        self._correlationCoefDeepDive('soil_moisture_percent', 'berry_size_mm', 'quality_category')
-        self._correlationCoefDeepDive('sugar_content_brix', 'berry_size_mm', 'quality_category')
-        self._correlationCoefDeepDive('quality_score', 'sugar_content_brix', 'quality_category')
-        self._correlationCoefDeepDive('quality_score', 'sun_exposure_hours', 'quality_category')
-
-
-        print("Looking for outliers:\n")
-        self._detectOutliers('quality_score')
-        self._detectOutliers('berry_size_mm')
-        self._detectOutliers('cluster_weight_g')
-        self._detectOutliers('sun_exposure_hours')
-        self._detectOutliers('soil_moisture_percent')
-        self._detectOutliers('sugar_content_brix')
+        # self._correlationCoefDeepDive('quality_score', 'berry_size_mm', 'quality_category')
+        # self._correlationCoefDeepDive('quality_score', 'cluster_weight_g', 'quality_category')
+        # self._correlationCoefDeepDive('sun_exposure_hours', 'berry_size_mm', 'quality_category')
+        # self._correlationCoefDeepDive('soil_moisture_percent', 'berry_size_mm', 'quality_category')
+        # self._correlationCoefDeepDive('sugar_content_brix', 'berry_size_mm', 'quality_category')
+        # self._correlationCoefDeepDive('quality_score', 'sugar_content_brix', 'quality_category')
+        # self._correlationCoefDeepDive('quality_score', 'sun_exposure_hours', 'quality_category')
+        #
+        #
+        # print("Looking for outliers:\n")
+        # self._detectOutliers('quality_score')
+        # self._detectOutliers('berry_size_mm')
+        # self._detectOutliers('cluster_weight_g')
+        # self._detectOutliers('sun_exposure_hours')
+        # self._detectOutliers('soil_moisture_percent')
+        # self._detectOutliers('sugar_content_brix')
 
 
         self.addCommentToSection(f"- niether corr coef suggest any good relationship between berry size and "
@@ -168,8 +165,7 @@ class GrapeQuality(AbstractMachineLearning):
                         hue=hue,
                         data=self.mainDataFrame)
         plt.title(f'{first} vs {second}')
-        self.addAttachment(Stages.DATA_EXPLORATION,
-                           plot,
+        self.addAttachment(plot,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"{first}_vs_{second}.png")
         plot.show()
@@ -189,8 +185,7 @@ class GrapeQuality(AbstractMachineLearning):
         sns.boxplot(y=column,
                     data=self.mainDataFrame)
         plt.title(f'outliers in {column}')
-        self.addAttachment(Stages.DATA_EXPLORATION,
-                           plot,
+        self.addAttachment(plot,
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"outliers_{column}.png")
         plot.show()
@@ -199,7 +194,7 @@ class GrapeQuality(AbstractMachineLearning):
               f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
               f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
 
-    def dataWrangling(self) -> (DataFrame, DataFrame):
+    def dataWrangling(self) -> (DataFrame, DataFrame, ColumnTransformer):
         self.addCommentToSection(f"- Data contains categorical types. need encode: \n"
                                  f"\t- OneHotEncoding for quality category"
                                  f"\t- scaler for numerical - we don't loose anything if we apply it blindly\n")
@@ -217,37 +212,51 @@ class GrapeQuality(AbstractMachineLearning):
             ('scaler', StandardScaler())
         ])
 
-        self.modelPreprocessor = ColumnTransformer([
+        modelPreprocessor = ColumnTransformer([
             ('cat', categorical_transformer, categorical_column),
             ('num', numerical_transformer, numerical_column)
 
         ])
-        return x, y
+        return x, y, modelPreprocessor
 
     def selectFeatures(self):
         pass
 
-    def trainModel(self, x:DataFrame, y:DataFrame) -> Any:
+    def trainModel(self, x:DataFrame, y:DataFrame, preProcessor:ColumnTransformer) -> AbstractModel:
         print(f"just reassure if we have all we need:\n {self.mainDataFrame.dtypes}\n")
+        randomForest = AbstractModel(RandomForestClassifier(random_state=2898), preProcessor)
+        randomForest.splitTestTrain(x, y, test_size=0.2, random_state=2)
+        randomForest.trainModel()
+        metrics = randomForest.calculateMetrics()
+        print(f"accuracy for this model is: {metrics['accuracy']}\n"
+              f"classification report for this model is:\n {metrics['classification_report']}\n"
+              f"below is the confusion matrix\n {metrics['confusion_matrix_array']}\n")
+        confusionMatrix = randomForest.getPlotOfConfusionMatrix(metrics['confusion_matrix_array'])
+        confusionMatrix.plot()
+        plt.title(r'confusion matrix')
+        self.addAttachment(confusionMatrix,
+                           AttachmentTypes.MATPLOTLIB_CHART,
+                           f"confusion_matrix.png")
+        plt.show()
+        plt.close()
 
-        x_train, x_test, y_train, y_test =  train_test_split(x, y, test_size = 0.2, random_state = 2)
 
-        forest = RandomForestClassifier(random_state = 2898)
-        forestPipeline = Pipeline(steps = [
-            ('preprocessor', self.modelPreprocessor),
-            ('model', forest)
-        ])
+        # x_train, x_test, y_train, y_test =  train_test_split(x, y, test_size = 0.2, random_state = 2)
 
-        forestPipeline.fit(x_train, y_train)
+        # forest = RandomForestClassifier(random_state = 2898)
+        # forestPipeline = Pipeline(steps = [
+        #     ('preprocessor', self.modelPreprocessor),
+        #     ('model', forest)
+        # ])
+        #
+        # forestPipeline.fit(x_train, y_train)
+        #
+        # forest_pred = forestPipeline.predict(x_test)
+        # forest_accuracy = accuracy_score(y_test, forest_pred)
+        # randomForestClassifier = RandomForestClassifier(random_state = 2898)
+        #     self._fitToModel(x_train, y_train, x_test, y_test)
 
-        forest_pred = forestPipeline.predict(x_test)
-        forest_accuracy = accuracy_score(y_test, forest_pred)
-        print('Accuracy Score is: ', forest_accuracy)
-
-        self.addCommentToSection(f"- After training, accuracy is {forest_accuracy}\n"
-                                 f"")
-
-        return forestPipeline
+        return randomForest
 
     def evaluateModel(self):
         pass

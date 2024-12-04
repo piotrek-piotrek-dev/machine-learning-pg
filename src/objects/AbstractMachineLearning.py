@@ -11,6 +11,8 @@ from sklearn.compose import ColumnTransformer
 
 import src.helpers.Utils as utils
 from ydata_profiling import ProfileReport
+
+from objects.AbstractModel import AbstractModel
 from src.helpers.Utils import Attachment
 from src.includes.constants import (
     Stages, DESCRIPTION_REPORT_NAME_TEMPLATE, ATTACHMENTS_DIR, AttachmentTypes,
@@ -25,17 +27,21 @@ class AbstractMachineLearning(ABC):
         utils.createDirectoryStructure()
         self._phaseAttachmentIndexes: Dict[Stages, int] = {p : 0 for p in Stages}
         self._attachmentsList: Dict[Stages, list[utils.Attachment]] = {p : [] for p in Stages}
+        self.dontSaveAttachments = False
         self.comments:Dict[Stages, list[str]] = {p : [] for p in Stages}
+        self.summary: Dict[Stages, str] = {p : f"### STAGE {p.name}COMMENT:\nPlease provide a comment" for p in Stages}
+
         self.dataSetName: str = ""
         self.dataSetFile: Path = Path()
-        self.mainDataFrame: pandas.DataFrame = pandas.DataFrame()
-        self.summary: Dict[Stages, str] = {p : f"### STAGE {p.name}COMMENT:\nPlease provide a comment" for p in Stages}
-        self.modelPreprocessor: ColumnTransformer = ColumnTransformer([])
-        self.model: Any = None
-        self.dontSaveAttachments = False
+        self.mainDataFrame: DataFrame = DataFrame()
+        # self.x: DataFrame = DataFrame()
+        # self.y: DataFrame = DataFrame()
+        #
+        # self.modelPreprocessor: ColumnTransformer = ColumnTransformer([])
+        self.model: AbstractModel
+
         self.currentStage = Stages.INIT
-        self.x: DataFrame
-        self.y: DataFrame
+
 
     def run(self):
         log.debug("entering main")
@@ -77,13 +83,13 @@ class AbstractMachineLearning(ABC):
         log.info("Data wrangling")
         self.currentStage = Stages.DATA_WRANGLING
         self.separator("Using knowledge from previous step")
-        x, y = self.dataWrangling()
+        x, y, preProcessor = self.dataWrangling()
         self._summarizeSection()
 
         log.info("Modelling")
         self.currentStage = Stages.MODELING
         self.separator()
-        self.model = self.trainModel(x, y)
+        self.model = self.trainModel(x, y, preProcessor)
         self._summarizeSection()
 
         log.info("Feature exploring")
@@ -105,11 +111,11 @@ class AbstractMachineLearning(ABC):
     def addCommentToSection(self, comment: str) -> None:
         self.comments[self.currentStage].append(comment)
 
-    def saveCommentsFromSection(self, phase: Stages) -> None:
-        comments = '\n'.join(self.comments[phase])
-        self.summary[phase] = f"### STAGE {phase.name} COMMENT:\n{comments}"
-        p = self.addAttachment(phase, comments, AttachmentTypes.PLAINTEXT, "comments.txt", "section comments")
-        print(f"Comments saved to: {p}\n")
+    def saveCommentsFromSection(self) -> None:
+        comments = '\n'.join(self.comments[self.currentStage])
+        self.summary[self.currentStage] = f"### STAGE {self.currentStage.name} COMMENT:\n{comments}"
+        path = self.addAttachment(comments, AttachmentTypes.PLAINTEXT, "comments.txt", "section comments")
+        print(f"Comments saved to: {path}\n")
 
     def cleanDatasetName(self):
         self.dataSetName = utils.camelCaseAstring(self.dataSetName)
@@ -136,7 +142,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def dataWrangling(self) -> (DataFrame, DataFrame):
+    def dataWrangling(self) -> (DataFrame, DataFrame, ColumnTransformer):
         raise NotImplementedError
 
     @abstractmethod
@@ -144,7 +150,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def trainModel(self, x: DataFrame, y: DataFrame):
+    def trainModel(self, x: DataFrame, y: DataFrame, preProcessor: ColumnTransformer) -> AbstractModel:
         raise NotImplementedError
 
     @abstractmethod
@@ -171,7 +177,6 @@ class AbstractMachineLearning(ABC):
                 additionalCorrelations = {"auto": {"calculate": True}}
             report = self.generateProfileReport(self.mainDataFrame, title, reportName, additionalCorrelations)
             return self.addAttachment(
-                Stages.DATA_DESCRIPTION,
                 report,
                 AttachmentTypes.PROFILEREPORT,
                 reportName,
@@ -193,7 +198,7 @@ class AbstractMachineLearning(ABC):
             log.info(f"Report {reportName} already exists in {path}\nskipping... 🎉")
             return None
 
-    def addAttachment(self, stage: Stages,
+    def addAttachment(self,
                       attachment: Any,
                       attachmentType: AttachmentTypes = None,
                       fileName: str = None,
@@ -205,14 +210,14 @@ class AbstractMachineLearning(ABC):
             return None
 
         if fileName is None:
-            fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(stage))])
+            fileName = '_'.join([self.dataSetName, "fig", str(self._getPhaseAttachmentIndex(self.currentStage))])
         if comment is None and (attachmentType is AttachmentTypes.MATPLOTLIB_CHART or isinstance(attachment, Figure)):
             comment = attachment.gca().get_title()
         elif comment is None and (attachmentType is AttachmentTypes.PLOTLY_CHART or isinstance(attachment, Figure)):
             comment = attachment.layout.title.text
 
-        pathForFile = utils.saveAttachment(stage, attachment, attachmentType, fileName)
-        self._attachmentsList[stage].append(Attachment(fileName, pathForFile, comment))
+        pathForFile = utils.saveAttachment(self.currentStage, attachment, attachmentType, fileName)
+        self._attachmentsList[self.currentStage].append(Attachment(fileName, pathForFile, comment))
         return pathForFile
 
     def _getPhaseAttachmentIndex(self, phase: Stages) -> int:
@@ -221,7 +226,7 @@ class AbstractMachineLearning(ABC):
         return index
 
     def _summarizeSection(self):
-        self.saveCommentsFromSection(self.currentStage)
+        self.saveCommentsFromSection()
         #%% a cell
         print(self.summary.get(self.currentStage)+"\n###ATTACHMENTS:")
         for a in self._attachmentsList[self.currentStage]:
