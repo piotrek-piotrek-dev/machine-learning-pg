@@ -5,12 +5,12 @@ import numpy
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
-from typing import Optional, Any, Dict
+from typing import Optional
 import plotly.express
 from matplotlib.figure import Figure
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -243,19 +243,38 @@ class GrapeQuality(AbstractMachineLearning):
                                      xTest,
                                      yTrain,
                                      yTest)
-        self._runModel(randomForest)
+        gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(n_estimators = 500, min_samples_split = 5,
+                                         min_samples_leaf = 5, learning_rate = 0.5,
+                                         random_state = 2),
+                                                preProcessor,
+                                                xTrain,
+                                                xTest,
+                                                yTrain,
+                                                yTest)
 
+        modelDict = {
+            "Random Forest Tree": randomForest,
+            "Gradient Boost":  gradientBoostClassifier
+        }
+        # preparing to do this in parallel ...
+        for name, model in modelDict.items():
+            metrics = self._runModel(model)
 
         return randomForest
 
-    def _runModel(self, model: AbstractModel) -> Dict[str,Any]:
-        modelName:str = model.__class__.__name__
+    def _runModel(self, model: AbstractModel) -> None:
+        modelName:str = model.model.__class__.__name__
         model.trainModel()
         metrics = model.calculateMetrics()
 
-        print(f"accuracy for {modelName} model is: {metrics['accuracy']}\n"
-              f"classification report for {modelName} model is:\n {metrics['classification_report']}\n"
-              f"below is the confusion matrix for {modelName} model\n {metrics['confusion_matrix_array']}\n")
+        metricsSummary:str = ""
+        metricsSummary += f"Metrics for {modelName}:"
+        print(metricsSummary)
+        for k,v in metrics.items():
+            metricsSummary += f"\t{k}:\n\t{v}"
+            print(metricsSummary)
+        metricsSummary+=f"\n\n"
+        print(f"\n\n")
         confusionMatrix = model.getPlotOfConfusionMatrix(metrics['confusion_matrix_array'])
         confusionMatrix.plot()
         plt.title(f'{modelName} confusion matrix')
@@ -263,12 +282,18 @@ class GrapeQuality(AbstractMachineLearning):
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"{modelName}_confusion_matrix.png")
         plt.show()
-
         # calculate ROC
         # https://www.sharpsightlabs.com/blog/scikit-learn-roc_curve/
-
         plt.close()
-        return metrics
+
+        self.addAttachment(
+            metricsSummary,
+            AttachmentTypes.PLAINTEXT,
+            f"{modelName}_metrics_summary.txt"
+            f"metrics for model: {modelName}\n"
+        )
+
+
 
     def evaluateModel(self):
         pass

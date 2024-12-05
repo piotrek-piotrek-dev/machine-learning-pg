@@ -3,8 +3,7 @@ from typing import Any, Dict
 
 from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix,  \
-    precision_score, root_mean_squared_error
+from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
@@ -61,12 +60,9 @@ class AbstractModel(ABC):
         # https://www.kdnuggets.com/2022/09/visualizing-confusion-matrix-scikitlearn.html
         confMatrix = confusion_matrix(yTest, predicted, labels=self.model.classes_)
 
-        # calcucate RMSE 
-
         self.metrics['accuracy'] = accuracy_score(yTest, predicted)
-        self.metrics['precision'] = precision_score(yTest, predicted, labels=self.model.classes_)
-        self.metrics['rmse'] = root_mean_squared_error(yTest, predicted)
-        self.metrics['classification_report'] = classification_report(yTest, predicted, output_dict=True)
+        self.metrics['classification_report_dict'] = classification_report(yTest, predicted, output_dict=True)
+        self.metrics['classification_report_pretty'] = classification_report(yTest, predicted)
         self.metrics['confusion_matrix_array'] = confMatrix
 
         return self.metrics
