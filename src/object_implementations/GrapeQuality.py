@@ -263,6 +263,10 @@ class GrapeQuality(AbstractMachineLearning):
                            AttachmentTypes.MATPLOTLIB_CHART,
                            f"{modelName}_confusion_matrix.png")
         plt.show()
+
+        # calculate ROC
+        # https://www.sharpsightlabs.com/blog/scikit-learn-roc_curve/
+
         plt.close()
         return metrics
 

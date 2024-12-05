@@ -1,12 +1,14 @@
 from abc import ABC
 from typing import Any, Dict
 
-from timeit import default_timer
 from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix,  \
+    precision_score, root_mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
+
+from helpers.Utils import measure_time
 
 
 class AbstractModel(ABC):
@@ -25,16 +27,6 @@ class AbstractModel(ABC):
         self.modelPreprocessor:ColumnTransformer = preProcessor
         self._modelPipeline: Pipeline = Pipeline([('preprocessor', preProcessor), ('model', model)])
         self.metrics: Dict[str:Any] = {}
-
-    @staticmethod
-    def measure_time(func):
-        def wrapper(*args, **kwargs):
-            start = default_timer()
-            result = func(*args, **kwargs)
-            end = default_timer()
-            print(f"{func.__name__}() executed in {(end - start):.6f}s")
-            return result, end-start
-        return wrapper
 
     def splitTestTrain(self, xData:DataFrame, yData:DataFrame, **args) -> None:
         if len(args) == 0:
@@ -66,18 +58,18 @@ class AbstractModel(ABC):
                 yTest = self.y_test
 
         predicted = self.predict(xTest)
-        confMatrix = confusion_matrix(yTest, predicted, labels=self.model.classes_)
         # https://www.kdnuggets.com/2022/09/visualizing-confusion-matrix-scikitlearn.html
+        confMatrix = confusion_matrix(yTest, predicted, labels=self.model.classes_)
+
+        # calcucate RMSE 
 
         self.metrics['accuracy'] = accuracy_score(yTest, predicted)
-        self.metrics['classification_report'] = classification_report(yTest, predicted)
+        self.metrics['precision'] = precision_score(yTest, predicted, labels=self.model.classes_)
+        self.metrics['rmse'] = root_mean_squared_error(yTest, predicted)
+        self.metrics['classification_report'] = classification_report(yTest, predicted, output_dict=True)
         self.metrics['confusion_matrix_array'] = confMatrix
 
         return self.metrics
 
     def getPlotOfConfusionMatrix(self, confusionMatrix:Any)->Any:
         return ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=self.model.classes_)
-
-    def __eq__(self, other):
-
-        return True

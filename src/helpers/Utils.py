@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from re import split
+from timeit import default_timer
 from typing import Any
 
 import plotly.graph_objs
@@ -62,3 +63,12 @@ def saveAttachment(stage: Stages,
                 file.write(attachment)
 
     return pathForFile
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        start = default_timer()
+        result = func(*args, **kwargs)
+        end = default_timer()
+        #print(f"{func.__name__}() executed in {(end - start):.6f}s")
+        return result, end-start
+    return wrapper
