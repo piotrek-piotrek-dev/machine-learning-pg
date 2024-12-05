@@ -5,12 +5,13 @@ import numpy
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
-from typing import Optional
+from typing import Optional, Any, Dict
 import plotly.express
 from matplotlib.figure import Figure
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -223,40 +224,43 @@ class GrapeQuality(AbstractMachineLearning):
         pass
 
     def trainModel(self, x:DataFrame, y:DataFrame, preProcessor:ColumnTransformer) -> AbstractModel:
-        print(f"just reassure if we have all we need:\n {self.mainDataFrame.dtypes}\n")
-        randomForest = AbstractModel(RandomForestClassifier(random_state=2898), preProcessor)
-        randomForest.splitTestTrain(x, y, test_size=0.2, random_state=2)
-        randomForest.trainModel()
-        metrics = randomForest.calculateMetrics()
-        print(f"accuracy for this model is: {metrics['accuracy']}\n"
-              f"classification report for this model is:\n {metrics['classification_report']}\n"
-              f"below is the confusion matrix\n {metrics['confusion_matrix_array']}\n")
-        confusionMatrix = randomForest.getPlotOfConfusionMatrix(metrics['confusion_matrix_array'])
-        confusionMatrix.plot()
-        plt.title(r'confusion matrix')
-        self.addAttachment(confusionMatrix,
-                           AttachmentTypes.MATPLOTLIB_CHART,
-                           f"confusion_matrix.png")
-        plt.show()
-        plt.close()
+        print(f"just reassure if we have all we need:\n {self.mainDataFrame.dtypes}\n"
+              f"we'll be checking out and comparing 3 different models:\n"
+              f"1. Random Forest Tree\n"
+              f"2. Gradient Boost\n"
+              f"3. Extreme Gradient Boost (XGB)\n")
 
+        # for an even game, let's settle a common split for all models:
+        xTrain, xTest, yTrain, yTest = train_test_split(x,y, test_size=0.2, random_state=2)
 
-        # x_train, x_test, y_train, y_test =  train_test_split(x, y, test_size = 0.2, random_state = 2)
+        randomForest = AbstractModel(RandomForestClassifier(random_state=2898),
+                                     preProcessor,
+                                     xTrain,
+                                     xTest,
+                                     yTrain,
+                                     yTest)
+        self._runModel(randomForest)
 
-        # forest = RandomForestClassifier(random_state = 2898)
-        # forestPipeline = Pipeline(steps = [
-        #     ('preprocessor', self.modelPreprocessor),
-        #     ('model', forest)
-        # ])
-        #
-        # forestPipeline.fit(x_train, y_train)
-        #
-        # forest_pred = forestPipeline.predict(x_test)
-        # forest_accuracy = accuracy_score(y_test, forest_pred)
-        # randomForestClassifier = RandomForestClassifier(random_state = 2898)
-        #     self._fitToModel(x_train, y_train, x_test, y_test)
 
         return randomForest
+
+    def _runModel(self, model: AbstractModel) -> Dict[str,Any]:
+        modelName:str = model.__class__.__name__
+        model.trainModel()
+        metrics = model.calculateMetrics()
+
+        print(f"accuracy for {modelName} model is: {metrics['accuracy']}\n"
+              f"classification report for {modelName} model is:\n {metrics['classification_report']}\n"
+              f"below is the confusion matrix for {modelName} model\n {metrics['confusion_matrix_array']}\n")
+        confusionMatrix = model.getPlotOfConfusionMatrix(metrics['confusion_matrix_array'])
+        confusionMatrix.plot()
+        plt.title(f'{modelName} confusion matrix')
+        self.addAttachment(confusionMatrix,
+                           AttachmentTypes.MATPLOTLIB_CHART,
+                           f"{modelName}_confusion_matrix.png")
+        plt.show()
+        plt.close()
+        return metrics
 
     def evaluateModel(self):
         pass
