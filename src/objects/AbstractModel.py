@@ -24,7 +24,7 @@ class AbstractModel(ABC):
         self.y_test = yTest if yTest is not None else DataFrame()
         self.modelPreprocessor:ColumnTransformer = preProcessor
         self._modelPipeline: Pipeline = Pipeline([('preprocessor', preProcessor), ('model', model)])
-        self.metrics = Dict[str:Any]
+        self.metrics: Dict[str:Any] = {}
 
     @staticmethod
     def measure_time(func):
@@ -42,9 +42,13 @@ class AbstractModel(ABC):
         else:
             self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(xData, yData, **args)
 
-    @measure_time
     def trainModel(self):
         # TODO: capture the return of .fit!!
+        model, execTime = self._fitModel()
+        self.metrics['fit_time'] = execTime
+
+    @measure_time
+    def _fitModel(self) -> (Any, float):
         self._modelPipeline.fit(self.x_train, self.y_train)
 
     def predict(self, xData:DataFrame = None) -> Any:
@@ -65,11 +69,10 @@ class AbstractModel(ABC):
         confMatrix = confusion_matrix(yTest, predicted, labels=self.model.classes_)
         # https://www.kdnuggets.com/2022/09/visualizing-confusion-matrix-scikitlearn.html
 
-        self.metrics = {
-            'accuracy': accuracy_score(yTest, predicted),
-            'classification_report' : classification_report(yTest, predicted),
-            'confusion_matrix_array' : confMatrix
-        }
+        self.metrics['accuracy'] = accuracy_score(yTest, predicted)
+        self.metrics['classification_report'] = classification_report(yTest, predicted)
+        self.metrics['confusion_matrix_array'] = confMatrix
+
         return self.metrics
 
     def getPlotOfConfusionMatrix(self, confusionMatrix:Any)->Any:

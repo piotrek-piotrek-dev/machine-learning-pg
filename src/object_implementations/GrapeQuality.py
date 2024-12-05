@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from includes.constants import DATASET_DST_DIR
 from objects.AbstractModel import AbstractModel
 from src.helpers.KaggleDownloader import KaggleDownloader
 from src.includes.constants import AttachmentTypes
@@ -33,15 +34,18 @@ class GrapeQuality(AbstractMachineLearning):
 
 
     def getDataSet(self) -> (Optional[pandas.DataFrame], str):
+        # Kaggle API is having difficult times need to skip...
         kaggleDownloader = KaggleDownloader()
         dataSetFile = "GRAPE_QUALITY.csv"
-        if (dataSetFiles := kaggleDownloader.downloadDataSet(dataSetName=self._dataSetKaggleURI)) is None:
-            log.critical("💀something really bad happened on the way, check logs")
-            raise Exception("💀something really bad happened on the way, check logs")
-        if len(dataSetFiles) > 1:
-            return pandas.read_csv(self.selectSourceFile(dataSetFiles, dataSetFile)), dataSetFile
-        else:
-            return pandas.read_csv(dataSetFiles[0]), dataSetFiles[0]
+        return pandas.read_csv(Path(DATASET_DST_DIR, dataSetFile)), dataSetFile
+
+        # if (dataSetFiles := kaggleDownloader.downloadDataSet(dataSetName=self._dataSetKaggleURI)) is None:
+        #     log.critical("💀something really bad happened on the way, check logs")
+        #     raise Exception("💀something really bad happened on the way, check logs")
+        # if len(dataSetFiles) > 1:
+        #     return pandas.read_csv(self.selectSourceFile(dataSetFiles, dataSetFile)), dataSetFile
+        # else:
+        #     return pandas.read_csv(dataSetFiles[0]), dataSetFiles[0]
 
     def selectSourceFile(self, fileList: list, selection: str) -> Path:
         return next((p for p in fileList if p.name == selection) , None)
