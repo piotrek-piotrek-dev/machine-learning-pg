@@ -79,24 +79,24 @@ class AbstractMachineLearning(ABC):
         log.info("Data wrangling")
         self.currentStage = Stages.DATA_WRANGLING
         self.separator("Using knowledge from previous step")
-        x, y, preProcessor = self.dataWrangling()
+        x, ySet, preProcessor = self.dataWrangling()
         self._summarizeSection()
 
         log.info("Modelling")
         self.currentStage = Stages.MODELING
         self.separator()
-        model:AbstractModel = self.trainModel(x, y, preProcessor)
+        model:AbstractModel = self.trainModel(x, ySet, preProcessor)
         self._summarizeSection()
 
         log.info("Feature exploring")
         self.currentStage = Stages.FEATURE_SELECTION
         self.separator()
-        self.selectFeatures(model)
+        self.selectFeatures(model,x, ySet)
 
         log.info("tuning model (on features)")
         self.currentStage = Stages.MODEL_ADJUSTING
         self.separator()
-        self.evaluateModel(model, x, y)
+        self.evaluateModel(model, x, ySet)
 
 
 
@@ -139,19 +139,19 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def dataWrangling(self) -> (DataFrame, DataFrame, ColumnTransformer):
+    def dataWrangling(self) -> (DataFrame, {str:DataFrame}, ColumnTransformer):
         raise NotImplementedError
 
     @abstractmethod
-    def selectFeatures(self, model:AbstractModel) -> None:
+    def selectFeatures(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def trainModel(self, x: DataFrame, y: DataFrame, preProcessor: ColumnTransformer) -> AbstractModel:
+    def trainModel(self, x: DataFrame, ySet: {str:DataFrame}, preProcessor: ColumnTransformer) -> AbstractModel:
         raise NotImplementedError
 
     @abstractmethod
-    def evaluateModel(self, model: AbstractModel, x: DataFrame, y: DataFrame):
+    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
         raise NotImplementedError
 
     @abstractmethod

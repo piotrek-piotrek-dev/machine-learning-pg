@@ -17,7 +17,8 @@ class AbstractModel(ABC):
                  xTrain: DataFrame=None,
                  xTest: DataFrame=None,
                  yTrain: DataFrame=None,
-                 yTest: DataFrame=None,):
+                 yTest: DataFrame=None,
+                 labels: [str]=None):
         self.model=model
         self.x_train = xTrain if xTrain is not None else DataFrame()
         self.y_train = yTrain if yTrain is not None else DataFrame()
@@ -26,6 +27,7 @@ class AbstractModel(ABC):
         self.modelPreprocessor:ColumnTransformer = preProcessor
         self.modelPipeline: Pipeline = Pipeline([('preprocessor', preProcessor), ('model', model)])
         self.metrics: Dict[str:Any] = {}
+        self.labels = labels
 
     def splitTestTrain(self, xData:DataFrame, yData:DataFrame, **args) -> None:
         if len(args) == 0:
@@ -70,4 +72,4 @@ class AbstractModel(ABC):
         return self.metrics
 
     def getPlotOfConfusionMatrix(self, confusionMatrix:Any)->Any:
-        return ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=self.model.classes_)
+        return ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=self.labels)

@@ -9,9 +9,11 @@ from typing import Optional
 import plotly.express
 from matplotlib.figure import Figure
 import shap
+from pandas import factorize
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.feature_selection import RFECV
 from sklearn.model_selection import train_test_split, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -86,7 +88,14 @@ class GrapeQuality(AbstractMachineLearning):
     def cleanUpDataframe(self):
         #we don't need the id column that came with the dataset
         self.mainDataFrame.drop('sample_id', axis=1, inplace=True)
+        self.mainDataFrame["quality_category"] = self.mainDataFrame["quality_category"].astype('category')
+        self.mainDataFrame["variety"] = self.mainDataFrame["variety"].astype('category')
+        self.mainDataFrame["region"] = self.mainDataFrame["region"].astype('category')
+        self.mainDataFrame["harvest_date"] = self.mainDataFrame["harvest_date"].astype('datetime64[ns]')
+
+        self.mainDataFrame.info()
         self.addCommentToSection(f"- Dropped column 'sample_id' as we don't need it\n"
+                                 f"- changed column types"
                                  f"- Other than that, this dataset seems clean")
 
     def exploratoryAnalysis(self):
@@ -208,8 +217,8 @@ class GrapeQuality(AbstractMachineLearning):
         x = self.mainDataFrame.drop('quality_category', axis = 1)
         y = self.mainDataFrame['quality_category']
 
-        categorical_column = [cname for cname in x.columns if x[cname].dtype == 'object']
         numerical_column = [cname for cname in x.columns if x[cname].dtype in ['int', 'float']]
+        categorical_column = [cname for cname in x.columns if cname not in numerical_column]
 
         categorical_transformer = Pipeline(steps = [
             ('onehot', OneHotEncoder(handle_unknown = 'ignore', sparse_output = True))
@@ -220,12 +229,14 @@ class GrapeQuality(AbstractMachineLearning):
 
         modelPreprocessor = ColumnTransformer([
             ('cat', categorical_transformer, categorical_column),
-            ('num', numerical_transformer, numerical_column)
-
+            ('num', numerical_transformer, numerical_column),
         ])
-        return x, y, modelPreprocessor
 
-    def trainModel(self, x:DataFrame, y:DataFrame, preProcessor:ColumnTransformer) -> AbstractModel:
+        encoded, labels = factorize(y)
+
+        return x, {'encoded':encoded, 'labels':labels}, modelPreprocessor
+
+    def trainModel(self, x:DataFrame, ySet:{str: DataFrame}, preProcessor:ColumnTransformer) -> AbstractModel:
         print(f"just reassure if we have all we need:\n {x.dtypes}\n"
               f"we'll be checking out and comparing 3 different models:\n"
               f"1. Random Forest Tree\n"
@@ -233,21 +244,23 @@ class GrapeQuality(AbstractMachineLearning):
               f"3. Extreme Gradient Boost (XGB)\n")
 
         # for an even game, let's settle a common split for all models:
-        xTrain, xTest, yTrain, yTest = train_test_split(x,y, test_size=0.2, random_state=2)
+        xTrain, xTest, yTrain, yTest = train_test_split(x,ySet['encoded'], test_size=0.2, random_state=2)
 
         randomForest = AbstractModel(RandomForestClassifier(random_state=2898),
                                      preProcessor,
                                      xTrain,
                                      xTest,
                                      yTrain,
-                                     yTest)
+                                     yTest,
+                                     ySet['labels'])
         gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(n_estimators = 500, min_samples_split = 5,
                                          min_samples_leaf = 5, learning_rate = 0.5, random_state = 2),
                                                 preProcessor,
                                                 xTrain,
                                                 xTest,
                                                 yTrain,
-                                                yTest)
+                                                yTest,
+                                                ySet['labels'])
 
         modelDict = {
             "Random Forest Tree": randomForest,
@@ -290,17 +303,25 @@ class GrapeQuality(AbstractMachineLearning):
             f"metrics for model: {modelName}\n"
         )
 
-    def selectFeatures(self, model:AbstractModel):
+    def selectFeatures(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
         # shap.initjs()
         # ex = shap.TreeExplainer(model.tmp)
         # shap_values = ex.shap_values(model.x_test)
         # shap.summary_plot(shap_values, model.x_test)
 
         # https://scikit-learn.org/stable/auto_examples/feature_selection/plot_rfe_with_cross_validation.html#sphx-glr-auto-examples-feature-selection-plot-rfe-with-cross-validation-py
-
+        rfecv = RFECV(estimator=model.modelPipeline,
+                      step=1,
+                      cv=5,
+                      scoring='accuracy',
+                      min_features_to_select=1,
+                      n_jobs=-1
+                      )
+        rfecv.fit(x,ySet['encoded'])
+        print(f"Optimal number of features: {rfecv.n_features_}")
         pass
 
-    def evaluateModel(self, model: AbstractModel, x: DataFrame, y: DataFrame) -> float:
+    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> float:
         # let's see if cross validation will increase our metrics
         print(f'initial classification report:\n {model.metrics['classification_report_pretty']}\n'
               f"fit time: {model.metrics['fit_time']}\n"
@@ -310,7 +331,7 @@ class GrapeQuality(AbstractMachineLearning):
         scoring = ['accuracy']#, 'average_precision']
         print(f'Running cross validation experiments\n')
         for cv in [5, 10, 20]:
-            scores = cross_validate(model.modelPipeline, x, y, cv=cv, scoring=scoring)
+            scores = cross_validate(model.modelPipeline, x, ySet['encoded'], cv=cv, scoring=scoring)
             print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n {scores}\n\n')
 
         return 1.0
