@@ -8,10 +8,11 @@ import seaborn as sns
 from typing import Optional
 import plotly.express
 from matplotlib.figure import Figure
+import shap
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -224,11 +225,8 @@ class GrapeQuality(AbstractMachineLearning):
         ])
         return x, y, modelPreprocessor
 
-    def selectFeatures(self):
-        pass
-
     def trainModel(self, x:DataFrame, y:DataFrame, preProcessor:ColumnTransformer) -> AbstractModel:
-        print(f"just reassure if we have all we need:\n {self.mainDataFrame.dtypes}\n"
+        print(f"just reassure if we have all we need:\n {x.dtypes}\n"
               f"we'll be checking out and comparing 3 different models:\n"
               f"1. Random Forest Tree\n"
               f"2. Gradient Boost\n"
@@ -244,8 +242,7 @@ class GrapeQuality(AbstractMachineLearning):
                                      yTrain,
                                      yTest)
         gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(n_estimators = 500, min_samples_split = 5,
-                                         min_samples_leaf = 5, learning_rate = 0.5,
-                                         random_state = 2),
+                                         min_samples_leaf = 5, learning_rate = 0.5, random_state = 2),
                                                 preProcessor,
                                                 xTrain,
                                                 xTest,
@@ -268,10 +265,10 @@ class GrapeQuality(AbstractMachineLearning):
         metrics = model.calculateMetrics()
 
         metricsSummary:str = ""
-        metricsSummary += f"Metrics for {modelName}:"
+        metricsSummary += f"Metrics for {modelName}:\n"
         print(metricsSummary)
         for k,v in metrics.items():
-            metricsSummary += f"\t{k}:\n\t{v}"
+            metricsSummary += f"\t{k}:\n\t{v}\n"
             print(metricsSummary)
         metricsSummary+=f"\n\n"
         print(f"\n\n")
@@ -293,10 +290,31 @@ class GrapeQuality(AbstractMachineLearning):
             f"metrics for model: {modelName}\n"
         )
 
+    def selectFeatures(self, model:AbstractModel):
+        # shap.initjs()
+        # ex = shap.TreeExplainer(model.tmp)
+        # shap_values = ex.shap_values(model.x_test)
+        # shap.summary_plot(shap_values, model.x_test)
 
+        # https://scikit-learn.org/stable/auto_examples/feature_selection/plot_rfe_with_cross_validation.html#sphx-glr-auto-examples-feature-selection-plot-rfe-with-cross-validation-py
 
-    def evaluateModel(self):
         pass
+
+    def evaluateModel(self, model: AbstractModel, x: DataFrame, y: DataFrame) -> float:
+        # let's see if cross validation will increase our metrics
+        print(f'initial classification report:\n {model.metrics['classification_report_pretty']}\n'
+              f"fit time: {model.metrics['fit_time']}\n"
+              f"accuracy: {model.metrics['accuracy']}\n\n"
+              f"we'll try to run cross validation to see if splitting the set can do some good")
+        # scoring parameter can be omne of: 'neg_mean_squared_log_error', 'mutual_info_score', 'roc_auc', 'adjusted_mutual_info_score', 'neg_log_loss', 'normalized_mutual_info_score', 'neg_mean_squared_error', 'f1_macro', 'neg_negative_likelihood_ratio', 'recall_micro', 'homogeneity_score', 'fowlkes_mallows_score', 'max_error', 'neg_mean_absolute_percentage_error', 'f1_weighted', 'matthews_corrcoef', 'precision', 'average_precision', 'jaccard_macro', 'jaccard_weighted', 'neg_mean_gamma_deviance', 'precision_samples', 'f1', 'neg_mean_poisson_deviance', 'recall_macro', 'neg_brier_score', 'jaccard', 'f1_micro', 'neg_root_mean_squared_log_error', 'recall_weighted', 'roc_auc_ovr_weighted', 'explained_variance', 'neg_mean_absolute_error', 'rand_score', 'accuracy', 'precision_weighted', 'roc_auc_ovo_weighted', 'jaccard_samples', 'f1_samples', 'top_k_accuracy', 'neg_median_absolute_error', 'adjusted_rand_score', 'completeness_score', 'v_measure_score', 'recall', 'positive_likelihood_ratio', 'roc_auc_ovo', 'precision_micro', 'recall_samples', 'jaccard_micro', 'precision_macro', 'd2_absolute_error_score', 'neg_root_mean_squared_error', 'balanced_accuracy', 'roc_auc_ovr', 'r2'
+        scoring = ['accuracy']#, 'average_precision']
+        print(f'Running cross validation experiments\n')
+        for cv in [5, 10, 20]:
+            scores = cross_validate(model.modelPipeline, x, y, cv=cv, scoring=scoring)
+            print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n {scores}\n\n')
+
+        return 1.0
+
 
     def explainResults(self):
         pass

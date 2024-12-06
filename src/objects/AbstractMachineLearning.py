@@ -34,11 +34,8 @@ class AbstractMachineLearning(ABC):
         self.dataSetName: str = ""
         self.dataSetFile: Path = Path()
         self.mainDataFrame: DataFrame = DataFrame()
-        # self.x: DataFrame = DataFrame()
-        # self.y: DataFrame = DataFrame()
-        #
-        # self.modelPreprocessor: ColumnTransformer = ColumnTransformer([])
-        self.model: AbstractModel
+
+        # self.model: AbstractModel = None
 
         self.currentStage = Stages.INIT
 
@@ -59,7 +56,6 @@ class AbstractMachineLearning(ABC):
         pandas.set_option('display.max_columns', self.mainDataFrame.columns.size)
         self.addCommentToSection(f"We'll be using {self.dataSetFile} file for this project")
         self._summarizeSection()
-
 
         log.info("Describing DataSet")
         self.currentStage = Stages.DATA_DESCRIPTION
@@ -89,17 +85,18 @@ class AbstractMachineLearning(ABC):
         log.info("Modelling")
         self.currentStage = Stages.MODELING
         self.separator()
-        self.model = self.trainModel(x, y, preProcessor)
+        model:AbstractModel = self.trainModel(x, y, preProcessor)
         self._summarizeSection()
 
         log.info("Feature exploring")
         self.currentStage = Stages.FEATURE_SELECTION
         self.separator()
-
+        self.selectFeatures(model)
 
         log.info("tuning model (on features)")
         self.currentStage = Stages.MODEL_ADJUSTING
         self.separator()
+        self.evaluateModel(model, x, y)
 
 
 
@@ -146,7 +143,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def selectFeatures(self):
+    def selectFeatures(self, model:AbstractModel) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -154,7 +151,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def evaluateModel(self):
+    def evaluateModel(self, model: AbstractModel, x: DataFrame, y: DataFrame):
         raise NotImplementedError
 
     @abstractmethod
