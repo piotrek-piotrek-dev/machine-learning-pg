@@ -3,11 +3,13 @@ from typing import Any, Dict
 
 from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, ConfusionMatrixDisplay, confusion_matrix, \
+    mean_absolute_error, precision_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
 from helpers.Utils import measure_time
+from includes.constants import Metrics
 
 
 class AbstractModel(ABC):
@@ -26,8 +28,9 @@ class AbstractModel(ABC):
         self.y_test = yTest if yTest is not None else DataFrame()
         self.modelPreprocessor:ColumnTransformer = preProcessor
         self.modelPipeline: Pipeline = Pipeline([('preprocessor', preProcessor), ('model', model)])
-        self.metrics: Dict[str:Any] = {}
-        self.labels = labels
+        self.metrics: Dict[int:Any] = {}
+        self.labels: [str] = labels
+
 
     def splitTestTrain(self, xData:DataFrame, yData:DataFrame, **args) -> None:
         if len(args) == 0:
@@ -49,7 +52,7 @@ class AbstractModel(ABC):
             x = self.x_test
         return self.modelPipeline.predict(x)
 
-    def calculateMetrics(self, xTest:DataFrame=None, yTest:DataFrame=None) -> Dict[str,Any]:
+    def calculateMetrics(self, xTest:DataFrame=None, yTest:DataFrame=None) -> Dict[Metrics,Any]:
         if (xTest is None) != (yTest is None):
             # XOR
             raise Exception("xTest and yTest cannot be both None")
@@ -63,11 +66,15 @@ class AbstractModel(ABC):
         confMatrix = confusion_matrix(yTest, predicted, labels=self.model.classes_)
 
         # our metrics would include: accuracy, recall, precision f1
-        self.metrics['accuracy'] = accuracy_score(yTest, predicted)
-        #self.metrics['MAE'] = mean_absolute_error(yTest, predicted)
-        self.metrics['classification_report_dict'] = classification_report(yTest, predicted, output_dict=True)
-        self.metrics['classification_report_pretty'] = classification_report(yTest, predicted)
-        self.metrics['confusion_matrix_array'] = confMatrix
+        # following https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
+        self.metrics[Metrics.ACCURACY] = accuracy_score(yTest, predicted)
+        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
+        self.metrics[Metrics.PRECISION] = precision_score(yTest, predicted, average=None)
+        self.metrics[Metrics.MAE] = mean_absolute_error(yTest, predicted)
+        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html
+        self.metrics[Metrics.CLASSIFICATION_REPORT_DICT] = classification_report(yTest, predicted, output_dict=True)
+        self.metrics[Metrics.CLASSIFICATION_REPORT] = classification_report(yTest, predicted)
+        self.metrics[Metrics.CONFUSION_MATRIX_ARRAY] = confMatrix
 
         return self.metrics
 

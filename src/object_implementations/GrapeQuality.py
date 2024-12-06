@@ -18,7 +18,7 @@ from sklearn.model_selection import train_test_split, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from includes.constants import DATASET_DST_DIR
+from includes.constants import DATASET_DST_DIR, Metrics
 from objects.AbstractModel import AbstractModel
 from src.helpers.KaggleDownloader import KaggleDownloader
 from src.includes.constants import AttachmentTypes
@@ -211,7 +211,7 @@ class GrapeQuality(AbstractMachineLearning):
 
     def dataWrangling(self) -> (DataFrame, DataFrame, ColumnTransformer):
         self.addCommentToSection(f"- Data contains categorical types. need encode: \n"
-                                 f"\t- OneHotEncoding for quality category"
+                                 f"\t- OneHotEncoding for quality category\n"
                                  f"\t- scaler for numerical - we don't loose anything if we apply it blindly\n")
 
         x = self.mainDataFrame.drop('quality_category', axis = 1)
@@ -267,8 +267,9 @@ class GrapeQuality(AbstractMachineLearning):
             "Gradient Boost":  gradientBoostClassifier
         }
         # preparing to do this in parallel ...
+        # however now, the model fit times are so low that the parallel FW would be an overhaul
         for name, model in modelDict.items():
-            metrics = self._runModel(model)
+            self._runModel(model)
 
         return randomForest
 
@@ -285,7 +286,7 @@ class GrapeQuality(AbstractMachineLearning):
             print(metricsSummary)
         metricsSummary+=f"\n\n"
         print(f"\n\n")
-        confusionMatrix = model.getPlotOfConfusionMatrix(metrics['confusion_matrix_array'])
+        confusionMatrix = model.getPlotOfConfusionMatrix(metrics[Metrics.CONFUSION_MATRIX_ARRAY])
         confusionMatrix.plot()
         plt.title(f'{modelName} confusion matrix')
         self.addAttachment(confusionMatrix,

@@ -28,3 +28,11 @@ class AttachmentTypes(Enum):
     JSON = 4,
     CSV = 5,
     PLOTLY_CHART =6,
+
+class Metrics(Enum):
+    ACCURACY = 0,
+    PRECISION = 1,
+    MAE = 2,
+    CLASSIFICATION_REPORT_DICT = 4,
+    CLASSIFICATION_REPORT = 5,
+    CONFUSION_MATRIX_ARRAY = 6,

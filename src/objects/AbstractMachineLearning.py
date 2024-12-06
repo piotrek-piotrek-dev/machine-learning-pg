@@ -105,8 +105,11 @@ class AbstractMachineLearning(ABC):
         ------ Starting stage: {self.currentStage.name} ------""")
         if message: print(message + "\n")
 
-    def addCommentToSection(self, comment: str) -> None:
-        self.comments[self.currentStage].append(comment)
+    def addCommentToSection(self, comment: str, printt=True, doNotSave=False) -> None:
+        if printt:
+            print(comment)
+        if not doNotSave:
+            self.comments[self.currentStage].append(comment)
 
     def saveCommentsFromSection(self) -> None:
         comments = '\n'.join(self.comments[self.currentStage])
