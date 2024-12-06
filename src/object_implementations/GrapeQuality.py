@@ -5,7 +5,7 @@ import numpy
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
-from typing import Optional
+from typing import Optional, Any
 import plotly.express
 from matplotlib.figure import Figure
 import shap
@@ -14,9 +14,10 @@ from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.feature_selection import RFECV
-from sklearn.model_selection import train_test_split, cross_validate
+from sklearn.model_selection import train_test_split, cross_validate, RepeatedStratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBClassifier
 
 from includes.constants import DATASET_DST_DIR, Metrics
 from objects.AbstractModel import AbstractModel
@@ -218,10 +219,10 @@ class GrapeQuality(AbstractMachineLearning):
         y = self.mainDataFrame['quality_category']
 
         numerical_column = [cname for cname in x.columns if x[cname].dtype in ['int', 'float']]
-        categorical_column = [cname for cname in x.columns if cname not in numerical_column]
+        categorical_column = [cname for cname in x.columns if x[cname].dtype == 'category']
 
         categorical_transformer = Pipeline(steps = [
-            ('onehot', OneHotEncoder(handle_unknown = 'ignore', sparse_output = True))
+            ('onehot', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
         ])
         numerical_transformer = Pipeline(steps = [
             ('scaler', StandardScaler())
@@ -233,6 +234,7 @@ class GrapeQuality(AbstractMachineLearning):
         ])
 
         encoded, labels = factorize(y)
+        #encoded = pandas.DataFrame(data=encoded.T, columns=['category'])
 
         return x, {'encoded':encoded, 'labels':labels}, modelPreprocessor
 
@@ -254,7 +256,7 @@ class GrapeQuality(AbstractMachineLearning):
                                      yTest,
                                      ySet['labels'])
         gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(n_estimators = 500, min_samples_split = 5,
-                                         min_samples_leaf = 5, learning_rate = 0.5, random_state = 2),
+                                         min_samples_leaf = 5, learning_rate = 0.5, random_state = 2898),
                                                 preProcessor,
                                                 xTrain,
                                                 xTest,
@@ -262,14 +264,26 @@ class GrapeQuality(AbstractMachineLearning):
                                                 yTest,
                                                 ySet['labels'])
 
+        xgBoost = AbstractModel(XGBClassifier(random_state=2898, n_estimators = 500,learning_rate = 0.5),
+                                preProcessor,
+                                xTrain,
+                                xTest,
+                                yTrain,
+                                yTest,
+                                ySet['labels'])
+
         modelDict = {
             "Random Forest Tree": randomForest,
-            "Gradient Boost":  gradientBoostClassifier
+            "Gradient Boost":  gradientBoostClassifier,
+            "Xtreme Gradient Boost (XGB)": xgBoost
         }
         # preparing to do this in parallel ...
         # however now, the model fit times are so low that the parallel FW would be an overhaul
         for name, model in modelDict.items():
             self._runModel(model)
+
+        self.addCommentToSection(f"- Since the XGBC is so good, in the next phase it won't show any progress, so instead"
+                                 f"we'll take the RandomForestClassifier for next stage\n")
 
         return randomForest
 
@@ -304,39 +318,72 @@ class GrapeQuality(AbstractMachineLearning):
             f"metrics for model: {modelName}\n"
         )
 
-    def selectFeatures(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
-        # shap.initjs()
-        # ex = shap.TreeExplainer(model.tmp)
-        # shap_values = ex.shap_values(model.x_test)
-        # shap.summary_plot(shap_values, model.x_test)
-
+    def crossValidation(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
+        # https://scikit-learn.org/stable/modules/cross_validation.html
         # https://scikit-learn.org/stable/auto_examples/feature_selection/plot_rfe_with_cross_validation.html#sphx-glr-auto-examples-feature-selection-plot-rfe-with-cross-validation-py
-        rfecv = RFECV(estimator=model.modelPipeline,
-                      step=1,
-                      cv=5,
-                      scoring='accuracy',
-                      min_features_to_select=1,
-                      n_jobs=-1
-                      )
-        rfecv.fit(x,ySet['encoded'])
-        print(f"Optimal number of features: {rfecv.n_features_}")
-        pass
 
-    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> float:
         # let's see if cross validation will increase our metrics
-        print(f'initial classification report:\n {model.metrics['classification_report_pretty']}\n'
-              f"fit time: {model.metrics['fit_time']}\n"
-              f"accuracy: {model.metrics['accuracy']}\n\n"
+        print(f'initial classification report:\n {model.metrics[Metrics.CLASSIFICATION_REPORT]}\n'
+              f"fit time: {model.metrics[Metrics.FIT_TIME]}\n"
+              f"accuracy: {model.metrics[Metrics.ACCURACY]}\n\n"
               f"we'll try to run cross validation to see if splitting the set can do some good")
         # scoring parameter can be omne of: 'neg_mean_squared_log_error', 'mutual_info_score', 'roc_auc', 'adjusted_mutual_info_score', 'neg_log_loss', 'normalized_mutual_info_score', 'neg_mean_squared_error', 'f1_macro', 'neg_negative_likelihood_ratio', 'recall_micro', 'homogeneity_score', 'fowlkes_mallows_score', 'max_error', 'neg_mean_absolute_percentage_error', 'f1_weighted', 'matthews_corrcoef', 'precision', 'average_precision', 'jaccard_macro', 'jaccard_weighted', 'neg_mean_gamma_deviance', 'precision_samples', 'f1', 'neg_mean_poisson_deviance', 'recall_macro', 'neg_brier_score', 'jaccard', 'f1_micro', 'neg_root_mean_squared_log_error', 'recall_weighted', 'roc_auc_ovr_weighted', 'explained_variance', 'neg_mean_absolute_error', 'rand_score', 'accuracy', 'precision_weighted', 'roc_auc_ovo_weighted', 'jaccard_samples', 'f1_samples', 'top_k_accuracy', 'neg_median_absolute_error', 'adjusted_rand_score', 'completeness_score', 'v_measure_score', 'recall', 'positive_likelihood_ratio', 'roc_auc_ovo', 'precision_micro', 'recall_samples', 'jaccard_micro', 'precision_macro', 'd2_absolute_error_score', 'neg_root_mean_squared_error', 'balanced_accuracy', 'roc_auc_ovr', 'r2'
         scoring = ['accuracy']#, 'average_precision']
         print(f'Running cross validation experiments\n')
         for cv in [5, 10, 20]:
             scores = cross_validate(model.modelPipeline, x, ySet['encoded'], cv=cv, scoring=scoring)
-            print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n {scores}\n\n')
+            print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n')
+            for k, v in scores.items():
+                print(f"\t{k}: {v}\n")
 
-        return 1.0
+        # below line will kill your session :)
+        # self._useRFECV(x,ySet['encoded'], model)
 
+        shap.initjs()
+        ex = shap.TreeExplainer(model.modelPipeline)
+        shap_values = ex.shap_values(model.x_test)
+        shap.summary_plot(shap_values, model.x_test)
+
+    def _useRFECV(self, x:DataFrame, y: DataFrame, model: AbstractModel) -> Any:
+        """
+        y - must be ySet['encoded']
+        rfecv = RFECV(estimator=_model.model,
+                      step=1,
+                      cv=5,
+                      scoring='accuracy',
+                      min_features_to_select=1,
+                      n_jobs=-1
+                      )
+        rfecv.fit(_x,ySet['encoded'])
+        print(f"Optimal number of features: {rfecv.n_features_}")
+        rfecv.support_rfecv_df = DataFrame(data=rfecv.ranking_,index=_x.columns,columns=[‘Rank’]).sort_values(by=’Rank’,ascending=True)
+        rfecv_df.head()
+        """
+        rfecv = RFECV(estimator=model.model)
+        pipeline = Pipeline([('feature selection', rfecv), ('model', model.model)])
+        cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=5, random_state=36851234)
+        n_scores = cross_val_score(pipeline, x, y, scoring='accuracy', cv=cv, n_jobs=-1)
+
+        pipeline.fit(x,y)
+        print(f"Optimal number of features: {rfecv.n_features_}")
+
+        rfecv_df = pandas.DataFrame(data=rfecv.ranking_,index=x.columns,columns=["Rank"]).sort_values(by="Rank",ascending=True)
+        print(rfecv_df.head())
+
+    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> Pipeline:
+        """
+        https://neptune.ai/blog/f1-score-accuracy-roc-auc-pr-auc
+        https://scikit-learn.org/stable/modules/grid_search.html#grid-search
+        :returns:
+        clf = Pipeline([
+            ('feature_selection', SelectFromModel(LinearSVC(penalty="l1"))),
+            ('classification', RandomForestClassifier())
+        ])
+        clf.fit(X, y)
+        """
+
+        print(f"Parameters of our estimator: {model.model.__class__.__name__} {model.model.get_params()}\n")
+        return None
 
     def explainResults(self):
         pass

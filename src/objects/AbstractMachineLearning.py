@@ -91,7 +91,7 @@ class AbstractMachineLearning(ABC):
         log.info("Feature exploring")
         self.currentStage = Stages.FEATURE_SELECTION
         self.separator()
-        self.selectFeatures(model,x, ySet)
+        self.crossValidation(model, x, ySet)
 
         log.info("tuning model (on features)")
         self.currentStage = Stages.MODEL_ADJUSTING
@@ -146,7 +146,8 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def selectFeatures(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> None:
+    def crossValidation(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> None:
+        # https://scikit-learn.org/stable/modules/cross_validation.html
         raise NotImplementedError
 
     @abstractmethod

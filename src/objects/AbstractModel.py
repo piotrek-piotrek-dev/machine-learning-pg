@@ -41,7 +41,7 @@ class AbstractModel(ABC):
     def trainModel(self):
         # TODO: capture the return of .fit!!
         model, execTime = self._fitModel()
-        self.metrics['fit_time'] = execTime
+        self.metrics[Metrics.FIT_TIME] = execTime
 
     @measure_time
     def _fitModel(self) -> (Any, float):
