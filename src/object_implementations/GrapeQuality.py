@@ -221,6 +221,7 @@ class GrapeQuality(AbstractMachineLearning):
         numerical_column = [cname for cname in x.columns if x[cname].dtype in ['int', 'float']]
         categorical_column = [cname for cname in x.columns if x[cname].dtype == 'category']
 
+        # https://www.kaggle.com/code/marcinrutecki/one-hot-encoding-everything-you-need-to-know
         categorical_transformer = Pipeline(steps = [
             ('onehot', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
         ])
@@ -336,13 +337,20 @@ class GrapeQuality(AbstractMachineLearning):
             for k, v in scores.items():
                 print(f"\t{k}: {v}\n")
 
+        self.addCommentToSection(f"- cross validation shows that dividing the set to 10 clusters is enough to obtain"
+                                 f"reasonable time to train and accuracy")
+
         # below line will kill your session :)
         # self._useRFECV(x,ySet['encoded'], model)
 
-        shap.initjs()
-        ex = shap.TreeExplainer(model.modelPipeline)
-        shap_values = ex.shap_values(model.x_test)
-        shap.summary_plot(shap_values, model.x_test)
+
+        # can't get SHAP to work due to: https://github.com/slundberg/shap/issues/2662
+        # _x = model.modelPreprocessor.fit_transform(x)
+        #
+        # shap.initjs()
+        # explainer = shap.TreeExplainer(model.model)
+        # shap_values = explainer(_x)
+        # shap.summary_plot(shap_values, _x)
 
     def _useRFECV(self, x:DataFrame, y: DataFrame, model: AbstractModel) -> Any:
         """
@@ -374,6 +382,7 @@ class GrapeQuality(AbstractMachineLearning):
         """
         https://neptune.ai/blog/f1-score-accuracy-roc-auc-pr-auc
         https://scikit-learn.org/stable/modules/grid_search.html#grid-search
+        PCA: https://medium.com/biased-algorithms/shap-values-for-categorical-features-fd4d0ae6edec
         :returns:
         clf = Pipeline([
             ('feature_selection', SelectFromModel(LinearSVC(penalty="l1"))),
