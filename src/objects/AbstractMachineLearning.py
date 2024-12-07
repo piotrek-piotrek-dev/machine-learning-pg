@@ -83,7 +83,7 @@ class AbstractMachineLearning(ABC):
         self._summarizeSection()
 
         log.info("Modelling")
-        self.currentStage = Stages.MODELING
+        self.currentStage = Stages.TRAINING
         self.separator()
         model:AbstractModel = self.trainModel(x, ySet, preProcessor)
         self._summarizeSection()
@@ -155,7 +155,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
+    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> AbstractModel:
         raise NotImplementedError
 
     @abstractmethod

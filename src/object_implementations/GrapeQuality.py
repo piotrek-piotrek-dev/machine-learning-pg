@@ -20,6 +20,7 @@ from sklearn.metrics import accuracy_score, precision_score, mean_absolute_error
 from sklearn.model_selection import train_test_split, cross_validate, RepeatedStratifiedKFold, cross_val_score, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sqlalchemy.orm import EXT_CONTINUE
 from xgboost import XGBClassifier
 
 from src.includes.constants import DATASET_DST_DIR, Metrics, RANDOM_STATE_MAGIC_NUMBER
@@ -389,7 +390,7 @@ class GrapeQuality(AbstractMachineLearning):
         rfecv_df = pandas.DataFrame(data=rfecv.ranking_,index=x.columns,columns=["Rank"]).sort_values(by="Rank",ascending=True)
         print(rfecv_df.head())
 
-    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> Pipeline:
+    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> AbstractModel:
         """
         https://neptune.ai/blog/f1-score-accuracy-roc-auc-pr-auc
         https://scikit-learn.org/stable/modules/grid_search.html#grid-search
@@ -418,10 +419,24 @@ class GrapeQuality(AbstractMachineLearning):
                                  f"Best hyperparameters: {study.best_params}\n")
         fig = optuna.visualization.plot_optimization_history(study)
         plotly.io.show(fig)
-        # below chart wouldb e great but can't resolve all the conflicts ...
-        fig = optuna.visualization.plot_terminator_improvement(study, plot_error=True)
-        plotly.io.show(fig)
-        return None
+        # below chart wouldb e great but it freezes my PC...
+        # fig = optuna.visualization.plot_terminator_improvement(study, plot_error=True)
+        # plotly.io.show(fig)
+
+        try:
+            bestParameters = AbstractModel(
+                model = RandomForestClassifier(**study.best_params),
+                preProcessor=model.modelPreprocessor,
+                xTrain = model.x_train,
+                yTrain = model.y_train,
+                xTest = model.x_test,
+                yTest = model.y_test,
+                labels=model.labels
+            )
+            return bestParameters
+        except Exception as e:
+            raise Exception("Trouble in assigning hyperparameters to the model" + repr(e))
+
 
     def _reduceHyperParams(self, trial, model: AbstractModel, method: Metrics) -> float:
         n_estimators = trial.suggest_int("n_estimators", 10, 200, log=True)
