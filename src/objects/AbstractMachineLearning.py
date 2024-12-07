@@ -89,7 +89,7 @@ class AbstractMachineLearning(ABC):
         self._summarizeSection()
 
         log.info("Feature exploring")
-        self.currentStage = Stages.FEATURE_SELECTION
+        self.currentStage = Stages.CROSS_VALIDATION
         self.separator()
         self.crossValidation(model, x, ySet)
 

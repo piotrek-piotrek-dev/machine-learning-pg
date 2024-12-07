@@ -20,7 +20,6 @@ from sklearn.metrics import accuracy_score, precision_score, mean_absolute_error
 from sklearn.model_selection import train_test_split, cross_validate, RepeatedStratifiedKFold, cross_val_score, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sqlalchemy.orm import EXT_CONTINUE
 from xgboost import XGBClassifier
 
 from src.includes.constants import DATASET_DST_DIR, Metrics, RANDOM_STATE_MAGIC_NUMBER
@@ -304,14 +303,11 @@ class GrapeQuality(AbstractMachineLearning):
         model.trainModel()
         metrics = model.calculateMetrics()
 
-        metricsSummary:str = ""
-        metricsSummary += f"Metrics for {modelName}:\n"
-        print(metricsSummary)
+        self.addCommentToSection(f"Metrics for {modelName}:\n")
         for k,v in metrics.items():
-            metricsSummary += f"\t{k}:\n\t{v}\n"
-            print(metricsSummary)
-        metricsSummary+=f"\n\n"
-        print(f"\n\n")
+            self.addCommentToSection(f"\t{k}:\n\t{v}\n")
+
+        self.addCommentToSection(f"\n\n")
         confusionMatrix = model.getPlotOfConfusionMatrix(metrics[Metrics.CONFUSION_MATRIX_ARRAY])
         confusionMatrix.plot()
         plt.title(f'{modelName} confusion matrix')
@@ -322,13 +318,6 @@ class GrapeQuality(AbstractMachineLearning):
         # calculate ROC
         # https://www.sharpsightlabs.com/blog/scikit-learn-roc_curve/
         plt.close()
-
-        self.addAttachment(
-            metricsSummary,
-            AttachmentTypes.PLAINTEXT,
-            f"{modelName}_metrics_summary.txt"
-            f"metrics for model: {modelName}\n"
-        )
 
     def crossValidation(self, model:AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
         # https://scikit-learn.org/stable/modules/cross_validation.html
@@ -344,9 +333,9 @@ class GrapeQuality(AbstractMachineLearning):
         self.addCommentToSection(f'Running cross validation experiments\n')
         for cv in [5, 10, 20]:
             scores = cross_validate(model.modelPipeline, x, ySet['encoded'], cv=cv, scoring=scoring)
-            print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n')
+            self.addCommentToSection(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n')
             for k, v in scores.items():
-                print(f"\t{k}: {v}\n")
+                self.addCommentToSection(f"\t{k}: {v}\n")
 
         self.addCommentToSection(f"- cross validation shows that dividing the set to 10 clusters is enough to obtain"
                                  f"reasonable time to train and accuracy\n"
@@ -433,6 +422,12 @@ class GrapeQuality(AbstractMachineLearning):
                 yTest = model.y_test,
                 labels=model.labels
             )
+
+            scores = cross_validate(bestParameters.modelPipeline, x, ySet['encoded'], cv=10, scoring=['accuracy'])
+            print(f'Best hyperparameters model {bestParameters.model.__class__.__name__ } scores for 10 clusters (input set is {x.shape[0]} long):\n')
+            for k, v in scores.items():
+                print(f"\t{k}: {v}\n")
+
             return bestParameters
         except Exception as e:
             raise Exception("Trouble in assigning hyperparameters to the model" + repr(e))
