@@ -424,10 +424,12 @@ class GrapeQuality(AbstractMachineLearning):
             )
 
             scores = cross_validate(bestParameters.modelPipeline, x, ySet['encoded'], cv=10, scoring=['accuracy'])
-            print(f'Best hyperparameters model {bestParameters.model.__class__.__name__ } scores for 10 clusters (input set is {x.shape[0]} long):\n')
+            self.addCommentToSection(f'Best hyperparameters model {bestParameters.model.__class__.__name__ } scores for'
+                                     f' 10 clusters (input set is {x.shape[0]} long):\n')
             for k, v in scores.items():
                 print(f"\t{k}: {v}\n")
 
+            self.addCommentToSection(f'Looks like we need to do more fine tuning...')
             return bestParameters
         except Exception as e:
             raise Exception("Trouble in assigning hyperparameters to the model" + repr(e))
