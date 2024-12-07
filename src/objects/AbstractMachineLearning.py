@@ -96,7 +96,7 @@ class AbstractMachineLearning(ABC):
         log.info("tuning model (on features)")
         self.currentStage = Stages.MODEL_ADJUSTING
         self.separator()
-        self.evaluateModel(model, x, ySet)
+        self.tuneModelHyperParameters(model, x, ySet)
 
 
 
@@ -155,7 +155,7 @@ class AbstractMachineLearning(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
+    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}):
         raise NotImplementedError
 
     @abstractmethod

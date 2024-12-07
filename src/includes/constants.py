@@ -7,6 +7,7 @@ REPORTS_DIR = Path("reports")
 ATTACHMENTS_DIR = Path("attachments")
 TOKEN_FILE = Path(Path.home(), ".kaggle", "kaggle.json")
 DATASET_DST_DIR = Path("..", "data_sets")
+RANDOM_STATE_MAGIC_NUMBER = 2898
 
 class Stages(Enum):
     INIT = 0
@@ -37,3 +38,4 @@ class Metrics(Enum):
     CLASSIFICATION_REPORT = 5,
     CONFUSION_MATRIX_ARRAY = 6,
     FIT_TIME = 7,
+    XVAL = 8,

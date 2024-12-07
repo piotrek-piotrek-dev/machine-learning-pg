@@ -1,25 +1,28 @@
 import logging
+from functools import partial
 from pathlib import Path
 
 import numpy
+import optuna
 import pandas
 from matplotlib import pyplot as plt
 import seaborn as sns
 from typing import Optional, Any
 import plotly.express
 from matplotlib.figure import Figure
-import shap
+from optuna.terminator import report_cross_validation_scores
 from pandas import factorize
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.feature_selection import RFECV
-from sklearn.model_selection import train_test_split, cross_validate, RepeatedStratifiedKFold, cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, mean_absolute_error
+from sklearn.model_selection import train_test_split, cross_validate, RepeatedStratifiedKFold, cross_val_score, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
 
-from src.includes.constants import DATASET_DST_DIR, Metrics
+from src.includes.constants import DATASET_DST_DIR, Metrics, RANDOM_STATE_MAGIC_NUMBER
 from src.objects.AbstractModel import AbstractModel
 from src.helpers.KaggleDownloader import KaggleDownloader
 from src.includes.constants import AttachmentTypes
@@ -253,17 +256,17 @@ class GrapeQuality(AbstractMachineLearning):
               f"3. Extreme Gradient Boost (XGB)\n")
 
         # for an even game, let's settle a common split for all models:
-        xTrain, xTest, yTrain, yTest = train_test_split(x,ySet['encoded'], test_size=0.2, random_state=2)
+        xTrain, xTest, yTrain, yTest = train_test_split(x,ySet['encoded'], test_size=0.2, random_state=RANDOM_STATE_MAGIC_NUMBER)
 
         # let's store model parameters for later
-        randomForest = AbstractModel(RandomForestClassifier(random_state=2898),
+        randomForest = AbstractModel(RandomForestClassifier(random_state=RANDOM_STATE_MAGIC_NUMBER),
                                      preProcessor,
                                      xTrain,
                                      xTest,
                                      yTrain,
                                      yTest,
                                      ySet['labels'])
-        gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(random_state = 2898,
+        gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(random_state = RANDOM_STATE_MAGIC_NUMBER,
                                                                            n_estimators = 500,
                                                                            learning_rate = 0.5, ),
                                                 preProcessor,
@@ -272,7 +275,7 @@ class GrapeQuality(AbstractMachineLearning):
                                                 yTrain,
                                                 yTest,
                                                 ySet['labels'])
-        xgBoost = AbstractModel(XGBClassifier(random_state=2898, n_estimators = 500,learning_rate = 0.5),
+        xgBoost = AbstractModel(XGBClassifier(random_state=RANDOM_STATE_MAGIC_NUMBER, n_estimators = 500,learning_rate = 0.5),
                                 preProcessor,
                                 xTrain,
                                 xTest,
@@ -331,13 +334,13 @@ class GrapeQuality(AbstractMachineLearning):
         # https://scikit-learn.org/stable/auto_examples/feature_selection/plot_rfe_with_cross_validation.html#sphx-glr-auto-examples-feature-selection-plot-rfe-with-cross-validation-py
 
         # let's see if cross validation will increase our metrics
-        print(f'initial classification report:\n {model.metrics[Metrics.CLASSIFICATION_REPORT]}\n'
+        self.addCommentToSection(f'initial classification report:\n {model.metrics[Metrics.CLASSIFICATION_REPORT]}\n'
               f"fit time: {model.metrics[Metrics.FIT_TIME]}\n"
               f"accuracy: {model.metrics[Metrics.ACCURACY]}\n\n"
               f"we'll try to run cross validation to see if splitting the set can do some good")
         # scoring parameter can be omne of: 'neg_mean_squared_log_error', 'mutual_info_score', 'roc_auc', 'adjusted_mutual_info_score', 'neg_log_loss', 'normalized_mutual_info_score', 'neg_mean_squared_error', 'f1_macro', 'neg_negative_likelihood_ratio', 'recall_micro', 'homogeneity_score', 'fowlkes_mallows_score', 'max_error', 'neg_mean_absolute_percentage_error', 'f1_weighted', 'matthews_corrcoef', 'precision', 'average_precision', 'jaccard_macro', 'jaccard_weighted', 'neg_mean_gamma_deviance', 'precision_samples', 'f1', 'neg_mean_poisson_deviance', 'recall_macro', 'neg_brier_score', 'jaccard', 'f1_micro', 'neg_root_mean_squared_log_error', 'recall_weighted', 'roc_auc_ovr_weighted', 'explained_variance', 'neg_mean_absolute_error', 'rand_score', 'accuracy', 'precision_weighted', 'roc_auc_ovo_weighted', 'jaccard_samples', 'f1_samples', 'top_k_accuracy', 'neg_median_absolute_error', 'adjusted_rand_score', 'completeness_score', 'v_measure_score', 'recall', 'positive_likelihood_ratio', 'roc_auc_ovo', 'precision_micro', 'recall_samples', 'jaccard_micro', 'precision_macro', 'd2_absolute_error_score', 'neg_root_mean_squared_error', 'balanced_accuracy', 'roc_auc_ovr', 'r2'
         scoring = ['accuracy']#, 'average_precision']
-        print(f'Running cross validation experiments\n')
+        self.addCommentToSection(f'Running cross validation experiments\n')
         for cv in [5, 10, 20]:
             scores = cross_validate(model.modelPipeline, x, ySet['encoded'], cv=cv, scoring=scoring)
             print(f'{scoring} scores for {cv} clusters (input set is {x.shape[0]} long):\n')
@@ -345,7 +348,8 @@ class GrapeQuality(AbstractMachineLearning):
                 print(f"\t{k}: {v}\n")
 
         self.addCommentToSection(f"- cross validation shows that dividing the set to 10 clusters is enough to obtain"
-                                 f"reasonable time to train and accuracy")
+                                 f"reasonable time to train and accuracy\n"
+                                 f"- would like to implement one more test - see if model is over or under fitted ('When a model performs highly on the training set but poorly on the test set, this is known as overfitting, or essentially creating a model that knows the training set very well but cannot be applied to new problems.')")
 
         # below line will kill your session :)
         # self._useRFECV(x,ySet['encoded'], model)
@@ -376,7 +380,7 @@ class GrapeQuality(AbstractMachineLearning):
         """
         rfecv = RFECV(estimator=model.model)
         pipeline = Pipeline([('feature selection', rfecv), ('model', model.model)])
-        cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=5, random_state=36851234)
+        cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=5, random_state=RANDOM_STATE_MAGIC_NUMBER)
         n_scores = cross_val_score(pipeline, x, y, scoring='accuracy', cv=cv, n_jobs=-1)
 
         pipeline.fit(x,y)
@@ -385,7 +389,7 @@ class GrapeQuality(AbstractMachineLearning):
         rfecv_df = pandas.DataFrame(data=rfecv.ranking_,index=x.columns,columns=["Rank"]).sort_values(by="Rank",ascending=True)
         print(rfecv_df.head())
 
-    def evaluateModel(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> Pipeline:
+    def tuneModelHyperParameters(self, model: AbstractModel, x: DataFrame, ySet: {str:DataFrame}) -> Pipeline:
         """
         https://neptune.ai/blog/f1-score-accuracy-roc-auc-pr-auc
         https://scikit-learn.org/stable/modules/grid_search.html#grid-search
@@ -398,8 +402,57 @@ class GrapeQuality(AbstractMachineLearning):
         clf.fit(X, y)
         """
 
-        print(f"Parameters of our estimator: {model.model.__class__.__name__} {model.model.get_params()}\n")
+        self.addCommentToSection(f"Parameters of our estimator: {model.model.__class__.__name__}"
+                                 f" {model.model.get_params()}\n"
+                                 f"- we'll be experimenting with GridSearchCV and then with Optuna"
+                                 f"let's try optuna...")
+        study = optuna.create_study(direction='minimize')
+
+        trials = 10
+        method = Metrics.ACCURACY
+        objective = partial(self._reduceHyperParams, model=model, method=method)
+        study.optimize(objective, n_trials=trials, show_progress_bar=True)
+
+        self.addCommentToSection(f"Optuna results with {trials} and {method.name}\n"
+                                 f"Best trial:{study.best_trial}\n"
+                                 f"Best hyperparameters: {study.best_params}\n")
+        fig = optuna.visualization.plot_optimization_history(study)
+        plotly.io.show(fig)
+        # below chart wouldb e great but can't resolve all the conflicts ...
+        fig = optuna.visualization.plot_terminator_improvement(study, plot_error=True)
+        plotly.io.show(fig)
         return None
+
+    def _reduceHyperParams(self, trial, model: AbstractModel, method: Metrics) -> float:
+        n_estimators = trial.suggest_int("n_estimators", 10, 200, log=True)
+        max_depth = trial.suggest_int("max_depth", 2, 32)
+        min_samples_split = trial.suggest_int("min_samples_split", 2, 10)
+        min_samples_leaf = trial.suggest_int("min_samples_leaf", 1, 10)
+
+        rndForestClf = RandomForestClassifier(n_estimators=n_estimators,
+                                            max_depth=max_depth,
+                                            min_samples_split=min_samples_split,
+                                            min_samples_leaf=min_samples_leaf,
+                                            random_state=RANDOM_STATE_MAGIC_NUMBER)
+        pipeline = Pipeline([
+            ('preprocessor', model.modelPreprocessor),
+            ('model', rndForestClf)
+        ])
+        pipeline.fit(model.x_train, model.y_train)
+        pred = pipeline.predict(model.x_test)
+        score = 0.0
+        if method == Metrics.PRECISION:
+            score = precision_score(model.y_test, pred)
+        elif method == Metrics.ACCURACY:
+            score = accuracy_score(model.y_test, pred)
+        elif method == Metrics.MAE:
+            score = mean_absolute_error(model.y_test, pred)
+        elif method == Metrics.XVAL:
+            scores = cross_val_score(pipeline, model.x_test, model.y_test, cv=KFold(n_splits=10, shuffle=True))
+            report_cross_validation_scores(trial, scores)
+            score = scores.mean()
+
+        return score
 
     def explainResults(self):
         pass
