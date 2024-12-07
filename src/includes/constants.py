@@ -6,7 +6,7 @@ PROJECT_NAME = "machine-learning-final-project"
 REPORTS_DIR = Path("reports")
 ATTACHMENTS_DIR = Path("attachments")
 TOKEN_FILE = Path(Path.home(), ".kaggle", "kaggle.json")
-DATASET_DST_DIR = Path(".", "data_sets")
+DATASET_DST_DIR = Path("..", "data_sets")
 
 class Stages(Enum):
     INIT = 0

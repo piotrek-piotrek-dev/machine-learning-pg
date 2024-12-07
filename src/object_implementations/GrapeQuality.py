@@ -19,8 +19,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
 
-from includes.constants import DATASET_DST_DIR, Metrics
-from objects.AbstractModel import AbstractModel
+from src.includes.constants import DATASET_DST_DIR, Metrics
+from src.objects.AbstractModel import AbstractModel
 from src.helpers.KaggleDownloader import KaggleDownloader
 from src.includes.constants import AttachmentTypes
 from src.objects.AbstractMachineLearning import AbstractMachineLearning
@@ -55,7 +55,7 @@ class GrapeQuality(AbstractMachineLearning):
         return next((p for p in fileList if p.name == selection) , None)
 
     def describeDataSet(self):
-        print(f"the shape of the dataset is: {self.mainDataFrame.shape}\n"
+        self.addCommentToSection(f"the shape of the dataset is: {self.mainDataFrame.shape}\n"
               f"columns are: {self.mainDataFrame.columns}\n"
               f"a few sample data to visualize:\n{self.mainDataFrame.head()}\n"
               f"The types which we'll be dealing with are:\n{self.mainDataFrame.dtypes}\n"
@@ -65,8 +65,8 @@ class GrapeQuality(AbstractMachineLearning):
               f"Are there any duplicate values?\n{self.mainDataFrame.duplicated().sum()}\n"
               f"Outliers in: "
               f"Kurtosis for ...")
+        # check if std/norm is necessary
 
-        # sprwadz czy trzeba normaliowac/standaryzowac dane
         self.addCommentToSection(f"- drop the 'sample_id' column that came with the original dataset\n"
                                  f"- There are no missing values - cool\n"
                                  f"- There are no duplicate rows\n"
@@ -79,7 +79,9 @@ class GrapeQuality(AbstractMachineLearning):
                                  f"- quality_score's Kurtosis is -0.5, thus we don't expect extreme outliers but we "
                                  f"shouldn't expect predictable results in range of Q1-Q3 percentile "
                                  f"(flat top of chart)\n")
-
+    """
+   we'd use this method if we'd need to deeply explore interactions on certain columns
+   """
     # @override
     # def addAdditionalCorrelationsToDescriptionReport(self):
     #     return {
@@ -132,6 +134,24 @@ class GrapeQuality(AbstractMachineLearning):
 
         self.addCommentToSection(f"- but we'd like to end with an estimation of successes (highest price and "
                                  f"quality) based on location of land")
+        """
+        below lines will cook my PC :)
+        print(f"Let's explore correlation in a few more columns:\n")
+        self._correlationCoefDeepDive('quality_score', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'cluster_weight_g', 'quality_category')
+        self._correlationCoefDeepDive('sun_exposure_hours', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('soil_moisture_percent', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('sugar_content_brix', 'berry_size_mm', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'sugar_content_brix', 'quality_category')
+        self._correlationCoefDeepDive('quality_score', 'sun_exposure_hours', 'quality_category')
+
+        print("Looking for outliers:\n")
+        self._detectOutliers('quality_score')
+        self._detectOutliers('berry_size_mm')
+        self._detectOutliers('cluster_weight_g')
+        self._detectOutliers('sun_exposure_hours')
+        self._detectOutliers('soil_moisture_percent')
+        self._detectOutliers('sugar_content_brix')"""
 
         # having trouble in presenting this histogram in seaborn/matplotlib
         region_vs_quality = plotly.express.histogram(
@@ -149,25 +169,6 @@ class GrapeQuality(AbstractMachineLearning):
 
         region_vs_quality.show()
         plt.close()
-
-        print(f"Let's explore correlation in a few columns:\n")
-        # self._correlationCoefDeepDive('quality_score', 'berry_size_mm', 'quality_category')
-        # self._correlationCoefDeepDive('quality_score', 'cluster_weight_g', 'quality_category')
-        # self._correlationCoefDeepDive('sun_exposure_hours', 'berry_size_mm', 'quality_category')
-        # self._correlationCoefDeepDive('soil_moisture_percent', 'berry_size_mm', 'quality_category')
-        # self._correlationCoefDeepDive('sugar_content_brix', 'berry_size_mm', 'quality_category')
-        # self._correlationCoefDeepDive('quality_score', 'sugar_content_brix', 'quality_category')
-        # self._correlationCoefDeepDive('quality_score', 'sun_exposure_hours', 'quality_category')
-        #
-        #
-        # print("Looking for outliers:\n")
-        # self._detectOutliers('quality_score')
-        # self._detectOutliers('berry_size_mm')
-        # self._detectOutliers('cluster_weight_g')
-        # self._detectOutliers('sun_exposure_hours')
-        # self._detectOutliers('soil_moisture_percent')
-        # self._detectOutliers('sugar_content_brix')
-
 
         self.addCommentToSection(f"- niether corr coef suggest any good relationship between berry size and "
                                  f"quality score\n"
@@ -187,11 +188,11 @@ class GrapeQuality(AbstractMachineLearning):
         plot.show()
         plt.close()
         # let's dive deeper:
-        print(f"{first} to {second} correlation coef: "
+        self.addCommentToSection(f"{first} to {second} correlation coef: "
               f"{self.mainDataFrame[first].corr(self.mainDataFrame[second])}\n")
         for category in self.mainDataFrame[hue].unique():
             tmp = self.mainDataFrame[self.mainDataFrame['quality_category'] == category]
-            print(f"Corr coef between quality_score and berry_size on {category}:\n\t"
+            self.addCommentToSection(f"Corr coef between quality_score and berry_size on {category}:\n\t"
                   f"kendall:  {tmp[first].corr(tmp[second], method='kendall')}\n\t"
                   f"spearman: {tmp[first].corr(tmp[second], method='spearman')}\n\t"
                   f"pearson:  {tmp[first].corr(tmp[second], method='pearson')}\n")
@@ -206,14 +207,17 @@ class GrapeQuality(AbstractMachineLearning):
                            f"outliers_{column}.png")
         plot.show()
         plt.close()
-        print(f"Mean in {column} is:        {self.mainDataFrame[column].mean()}\n"
-              f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
-              f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
+        self.addCommentToSection(f"Mean in {column} is:        {self.mainDataFrame[column].mean()}\n"
+                                  f"Median in {column} is:      {self.mainDataFrame[column].median()}\n"
+                                  f"Skewness in {column} is:    {self.mainDataFrame[column].skew()}\n")
 
     def dataWrangling(self) -> (DataFrame, DataFrame, ColumnTransformer):
         self.addCommentToSection(f"- Data contains categorical types. need encode: \n"
-                                 f"\t- OneHotEncoding for quality category\n"
-                                 f"\t- scaler for numerical - we don't loose anything if we apply it blindly\n")
+                                 f"\t- OneHotEncoding for category\n"
+                                 f"\t- scaler for numerical - we don't loose anything if we apply it blindly\n"
+                                 f"\t- leaving out the date column/format\n"
+                                 f"- wrap that in a column transformer\n"
+                                 f"- and snap all with a pipeline so it'll be a clean object to pass around")
 
         x = self.mainDataFrame.drop('quality_category', axis = 1)
         y = self.mainDataFrame['quality_category']
@@ -229,12 +233,14 @@ class GrapeQuality(AbstractMachineLearning):
             ('scaler', StandardScaler())
         ])
 
+        # https://www.kdnuggets.com/building-data-science-pipelines-using-pandas
         modelPreprocessor = ColumnTransformer([
             ('cat', categorical_transformer, categorical_column),
             ('num', numerical_transformer, numerical_column),
         ])
 
         encoded, labels = factorize(y)
+        # below conversion will screw up cross validation runs ... ehh..
         #encoded = pandas.DataFrame(data=encoded.T, columns=['category'])
 
         return x, {'encoded':encoded, 'labels':labels}, modelPreprocessor
@@ -249,6 +255,7 @@ class GrapeQuality(AbstractMachineLearning):
         # for an even game, let's settle a common split for all models:
         xTrain, xTest, yTrain, yTest = train_test_split(x,ySet['encoded'], test_size=0.2, random_state=2)
 
+        # let's store model parameters for later
         randomForest = AbstractModel(RandomForestClassifier(random_state=2898),
                                      preProcessor,
                                      xTrain,
@@ -256,15 +263,15 @@ class GrapeQuality(AbstractMachineLearning):
                                      yTrain,
                                      yTest,
                                      ySet['labels'])
-        gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(n_estimators = 500, min_samples_split = 5,
-                                         min_samples_leaf = 5, learning_rate = 0.5, random_state = 2898),
+        gradientBoostClassifier = AbstractModel(GradientBoostingClassifier(random_state = 2898,
+                                                                           n_estimators = 500,
+                                                                           learning_rate = 0.5, ),
                                                 preProcessor,
                                                 xTrain,
                                                 xTest,
                                                 yTrain,
                                                 yTest,
                                                 ySet['labels'])
-
         xgBoost = AbstractModel(XGBClassifier(random_state=2898, n_estimators = 500,learning_rate = 0.5),
                                 preProcessor,
                                 xTrain,

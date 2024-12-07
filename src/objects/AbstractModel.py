@@ -8,8 +8,8 @@ from sklearn.metrics import accuracy_score, classification_report, ConfusionMatr
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from helpers.Utils import measure_time
-from includes.constants import Metrics
+from src.helpers.Utils import measure_time
+from src.includes.constants import Metrics
 
 
 class AbstractModel(ABC):
@@ -22,6 +22,7 @@ class AbstractModel(ABC):
                  yTest: DataFrame=None,
                  labels: [str]=None):
         self.model=model
+        self.params = model.get_params()
         self.x_train = xTrain if xTrain is not None else DataFrame()
         self.y_train = yTrain if yTrain is not None else DataFrame()
         self.x_test = xTest if xTest is not None else DataFrame()

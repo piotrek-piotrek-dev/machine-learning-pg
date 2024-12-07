@@ -12,7 +12,7 @@ from sklearn.compose import ColumnTransformer
 import src.helpers.Utils as utils
 from ydata_profiling import ProfileReport
 
-from objects.AbstractModel import AbstractModel
+from src.objects.AbstractModel import AbstractModel
 from src.helpers.Utils import Attachment
 from src.includes.constants import (
     Stages, DESCRIPTION_REPORT_NAME_TEMPLATE, ATTACHMENTS_DIR, AttachmentTypes,
